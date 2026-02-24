@@ -2,6 +2,8 @@ import express from "express";
 import demandRoutes from "./routes/demand.routes.js";
 import healthRoutes from "./routes/health.routes.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
+import decisionRoutes from "./routes/decision.routes.js";
+
 
 const app = express();
 
@@ -11,6 +13,7 @@ app.use(express.json());
 // THEN routes
 app.use(healthRoutes);
 app.use(demandRoutes);
+app.use(decisionRoutes);
 
 // LAST
 app.use(errorHandler);
