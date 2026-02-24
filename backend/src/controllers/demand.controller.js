@@ -17,13 +17,16 @@ export const addDemand = async (req, res, next) => {
 
 export const fetchDemands = async (req, res, next) => {
   try {
-    const demands = await getDemands(req.query);
+    const result = await getDemands(req.query);
 
     res.status(200).json({
       success: true,
-      count: demands.length,
-      data: demands
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      data: result.demands
     });
+
   } catch (error) {
     next(error);
   }

@@ -5,6 +5,12 @@ export const createDemand = async (data) => {
 };
 
 export const getDemands = async (filters) => {
+
+  const page = parseInt(filters.page) || 1;
+  const limit = parseInt(filters.limit) || 10;
+
+  const skip = (page - 1) * limit;
+
   const query = {};
 
   if (filters.region) {
@@ -22,9 +28,30 @@ export const getDemands = async (filters) => {
     };
   }
 
-  return await Demand.find(query);
-};
+  const sortField = filters.sortBy || "date";
+  const sortOrder = filters.order === "asc" ? 1 : -1;
 
+  const allowedSortFields = ["date", "quantity", "region", "category"];
+
+  const finalSortField = allowedSortFields.includes(sortField)
+    ? sortField
+    : "date";
+
+  const demands = await Demand.find(query)
+
+  .sort({ [finalSortField]: sortOrder })
+  .skip(skip)
+  .limit(limit);
+
+  const total = await Demand.countDocuments(query);
+
+  return {
+    total,
+    page,
+    limit,
+    demands
+  };
+};
 
 export const getZoneSummary = async () => {
   return await Demand.aggregate([
