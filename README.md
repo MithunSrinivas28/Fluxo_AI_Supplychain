@@ -1,4 +1,4 @@
-# 🚀 Fluxo v2 – AI-Powered Supply Chain Decision Platform (Backend)
+# 🚀 Fluxo v2 – AI-Powered Supply Chain Decision Platform 
 
 Fluxo v2 is a decision-support system designed to model and analyze demand–supply mismatches across regions using synthetic data and machine learning.
 
