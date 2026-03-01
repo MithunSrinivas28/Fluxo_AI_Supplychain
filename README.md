@@ -135,4 +135,4 @@ npm run dev
 
 ---
 
-**Would you like me to generate the `docker-compose.yml` file to run both the Node.js and FastAPI services simultaneously?**
+
