@@ -1,42 +1,33 @@
+// src/models/demandRequest.model.js
+
 import mongoose from "mongoose";
 
 const demandRequestSchema = new mongoose.Schema(
   {
-    product: {
+    product_id: Number,
+    sku: String,
+    category: String,
+
+    zone: {
       type: String,
-      required: true
+      enum: ["north", "south", "east", "west"]
     },
-    fromZone: {
-      type: String,
-      enum: ["north", "south", "east", "west"],
-      required: true
-    },
-    toZone: {
-      type: String,
-      enum: ["north", "south", "east", "west"],
-      required: true
-    },
-    quantity: {
-      type: Number,
-      required: true
-    },
-    predictedKPI: {
-      type: Number
-    },
-    status: {
-      type: String,
-      enum: ["temporary", "saved"],
-      default: "temporary"
-    },
-    retailer: {
+
+    warehouse: String,
+
+    requested_quantity: Number,
+    discount_percent: Number,
+    is_festival: Number,
+    order_date: Date,
+
+    forecast: Number,
+    lower_bound: Number,
+    upper_bound: Number,
+    risk_level: String,
+
+    createdBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true
-    },
-    targetWarehouseZone: {
-      type: String,
-      enum: ["north", "south", "east", "west"],
-      required: true
+      ref: "User"
     }
   },
   { timestamps: true }

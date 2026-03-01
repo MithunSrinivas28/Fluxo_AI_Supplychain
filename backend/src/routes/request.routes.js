@@ -19,3 +19,21 @@ router.get(
   fetchRequests
 );
 export default router;
+
+
+import { createRequest } from "../services/request.service.js";
+
+// Controller to handle request creation (prediction call)
+export const addRequest = async (req, res, next) => {
+  try {
+    const request = await createRequest(req.body, req.user);
+
+    res.status(201).json({
+      success: true,
+      data: request
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
