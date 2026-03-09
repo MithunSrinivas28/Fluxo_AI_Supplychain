@@ -6,7 +6,7 @@ import decisionRoutes from "./routes/decision.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import requestRoutes from "./routes/request.routes.js";
 import inventoryRoutes from "./routes/inventory.routes.js";
-
+import cors from "cors";
 
 
 const app = express();
@@ -24,5 +24,8 @@ app.use(inventoryRoutes);
 
 // LAST
 app.use(errorHandler);
+app.use(cors({
+  origin: "http://localhost:5173"
+}));
 
 export default app;
