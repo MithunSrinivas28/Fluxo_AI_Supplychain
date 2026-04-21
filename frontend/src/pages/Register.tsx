@@ -9,19 +9,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { UserRole } from "@/types";
 import { motion } from "framer-motion";
 import fluxoLogo from "@/assets/fluxo-logo.png";
+import { registerUser } from "@/services/api";
 
 const Register = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("retailer");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    register(name, email, password, role);
-    navigate("/");
+    setError("");
+    setLoading(true);
+    try {
+      await registerUser(name, email, password);
+      // Registration successful — redirect to login
+      navigate("/login");
+    } catch (err: any) {
+      setError(err.message || "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -57,7 +69,12 @@ const Register = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="submit" className="w-full">Create Account</Button>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Creating account…" : "Create Account"}
+              </Button>
+              {error && (
+                <p className="text-center text-sm text-destructive">{error}</p>
+              )}
               <p className="text-center text-sm text-muted-foreground">
                 Already have an account?{" "}
                 <Link to="/login" className="text-primary font-medium hover:underline">Sign in</Link>

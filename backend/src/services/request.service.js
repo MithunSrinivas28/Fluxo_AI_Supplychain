@@ -2,6 +2,7 @@ import axios from "axios";
 import { DemandRequest } from "../models/demandRequest.model.js";
 import { Product } from "../models/product.model.js";
 import { WeeklySales } from "../models/weeklySales.model.js";
+import { Inventory } from "../models/inventory.model.js";
 
 export const createRequest = async (data, user) => {
 
@@ -14,6 +15,11 @@ export const createRequest = async (data, user) => {
     is_festival,
     order_date
   } = data;
+
+  // STEP 0 — Strict Payload Validation Layer
+  if (!sku || !zone || requested_quantity === undefined || requested_quantity <= 0) {
+    throw new Error("INVALID_PAYLOAD");
+  }
 
   // STEP 1 — Fetch Product
   const product = await Product.findOne({ sku });
@@ -106,6 +112,25 @@ try {
     risk_level,
     createdBy: user._id
   });
+
+  // STEP 7 — Update Inventory
+  const inventory = await Inventory.findOne({
+    sku: product.sku,
+    warehouseZone: zone
+  });
+
+  if (!inventory) {
+    throw new Error("INVENTORY_ZONE_NOT_FOUND");
+  }
+
+  const fulfilled = Math.min(inventory.stockLevel, requested_quantity);
+  inventory.stockLevel -= fulfilled;
+  await inventory.save();
+
+  // Mark Request Fulfillment Extent
+  savedRequest.status = fulfilled < requested_quantity ? "PARTIAL" : "FULFILLED";
+  savedRequest.fulfilledQuantity = fulfilled;
+  await savedRequest.save();
 
   return savedRequest;
 };

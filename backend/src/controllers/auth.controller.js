@@ -19,8 +19,8 @@ import { loginUser } from "../services/auth.service.js";
 
 export const login = async (req, res, next) => {
   try {
+    console.log("LOGIN HIT:", req.body);
     const result = await loginUser(req.body);
-    console.log("LOGIN ROUTE HIT");
 
     res.status(200).json({
       success: true,

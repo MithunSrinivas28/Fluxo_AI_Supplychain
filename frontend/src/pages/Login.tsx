@@ -9,18 +9,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { UserRole } from "@/types";
 import { motion } from "framer-motion";
 import fluxoLogo from "@/assets/fluxo-logo.png";
+import { loginUser } from "@/services/api";
 
 const Login = () => {
   const [email, setEmail] = useState("admin@fluxo.ai");
   const [password, setPassword] = useState("password");
   const [role, setRole] = useState<UserRole>("admin");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(email, password, role);
-    navigate("/");
+    setError("");
+    setLoading(true);
+    try {
+      const data = await loginUser(email, password);
+      // Set user state in AuthContext using the returned user info
+      const user = data.data?.user ?? data.user ?? { email, role };
+      login(user.email ?? email, password, (user.role as UserRole) ?? role);
+      navigate("/");
+    } catch (err: any) {
+      setError(err.message || "Login failed. Please check your credentials.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -52,7 +66,12 @@ const Login = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="submit" className="w-full">Sign In</Button>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Signing in…" : "Sign In"}
+              </Button>
+              {error && (
+                <p className="text-center text-sm text-destructive">{error}</p>
+              )}
               <p className="text-center text-sm text-muted-foreground">
                 No account?{" "}
                 <Link to="/register" className="text-primary font-medium hover:underline">Register</Link>

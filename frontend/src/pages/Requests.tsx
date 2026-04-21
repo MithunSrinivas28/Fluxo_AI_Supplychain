@@ -1,9 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { supplyRequests, inventoryItems } from "@/data/mock";
+import { useQuery } from "@tanstack/react-query";
+import { getRequests, getInventory } from "@/services/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity, AlertTriangle, Clock, TrendingUp, TrendingDown,
@@ -18,7 +19,7 @@ const section = (delay: number) => ({
   transition: { duration: 0.45, delay, ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number] },
 });
 
-/* ── ML-enriched request data derived from existing mock ── */
+/* ── ML-enriched request data derived from backend API ── */
 const mlZones = ["Zone A", "Zone B", "Zone C", "Zone D"];
 const mlRecommendations = ["Approve", "Partial Fulfill", "Reallocate Warehouse", "Delay Fulfillment"] as const;
 type MLRecommendation = typeof mlRecommendations[number];
@@ -45,49 +46,52 @@ interface EnrichedRequest {
   confidence: number;
 }
 
-const enrichedRequests: EnrichedRequest[] = supplyRequests.map((r, i) => {
-  const inv = inventoryItems.find(it => it.product === r.product);
-  const currentStock = inv?.stock ?? 500;
-  const zone = inv?.zone ?? mlZones[i % mlZones.length];
-  const predictedDemand = Math.round(r.quantity * (0.8 + Math.random() * 0.4));
-  const projectedAfter = Math.max(currentStock - r.quantity, 0);
-  const riskLevel: EnrichedRequest["riskLevel"] =
-    projectedAfter < 100 ? "critical" :
-    projectedAfter < 300 ? "moderate" :
-    projectedAfter < 800 ? "safe" : "neutral";
-  const recIdx = riskLevel === "critical" ? 2 : riskLevel === "moderate" ? 1 : 0;
-  const demandImpact = Math.round((r.quantity / Math.max(currentStock, 1)) * 100);
+function enrichRequests(requests: any[], inventoryItems: any[]): EnrichedRequest[] {
+  return requests.map((r: any, i: number) => {
+    const inv = inventoryItems.find((it: any) => it.product === r.product);
+    const currentStock = inv?.stock ?? 500;
+    const zone = inv?.zone ?? mlZones[i % mlZones.length];
+    const qty = r.quantity ?? r.requestedQty ?? 0;
+    const predictedDemand = Math.round(qty * (0.8 + Math.random() * 0.4));
+    const projectedAfter = Math.max(currentStock - qty, 0);
+    const riskLevel: EnrichedRequest["riskLevel"] =
+      projectedAfter < 100 ? "critical" :
+        projectedAfter < 300 ? "moderate" :
+          projectedAfter < 800 ? "safe" : "neutral";
+    const recIdx = riskLevel === "critical" ? 2 : riskLevel === "moderate" ? 1 : 0;
+    const demandImpact = Math.round((qty / Math.max(currentStock, 1)) * 100);
 
-  return {
-    id: r.id,
-    product: r.product,
-    zone,
-    suggestedWarehouse: `WH-${zone.replace("Zone ", "")}${Math.ceil(Math.random() * 3)}`,
-    requestedQty: r.quantity,
-    predictedWeeklyDemand: predictedDemand,
-    projectedStockAfter: projectedAfter,
-    currentStock,
-    riskLevel,
-    mlRecommendation: mlRecommendations[recIdx],
-    status: r.status,
-    date: r.date,
-    forecastAge: `${Math.floor(Math.random() * 20 + 5)}m ago`,
-    demandImpactScore: Math.min(demandImpact, 100),
-    ifApproved: {
-      shortageDate: projectedAfter < 200 ? "~3 days" : projectedAfter < 500 ? "~8 days" : ">14 days",
-      riskIncrease: riskLevel === "critical" ? 34 : riskLevel === "moderate" ? 12 : 3,
-    },
-    ifSplit: {
-      riskReduction: riskLevel === "critical" ? 41 : riskLevel === "moderate" ? 22 : 8,
-      newProjection: Math.round(projectedAfter + r.quantity * 0.4),
-    },
-    ifDelayed: {
-      demandDrift: Math.round((Math.random() * 8 + 2) * 10) / 10,
-      seasonalAdj: Math.round((Math.random() * 5 - 2) * 10) / 10,
-    },
-    confidence: Math.round(88 + Math.random() * 10),
-  };
-});
+    return {
+      id: r.id ?? r._id ?? `REQ-${i}`,
+      product: r.product,
+      zone,
+      suggestedWarehouse: `WH-${zone.replace("Zone ", "")}${Math.ceil(Math.random() * 3)}`,
+      requestedQty: qty,
+      predictedWeeklyDemand: predictedDemand,
+      projectedStockAfter: projectedAfter,
+      currentStock,
+      riskLevel,
+      mlRecommendation: mlRecommendations[recIdx],
+      status: r.status ?? "pending",
+      date: r.date ?? new Date().toISOString(),
+      forecastAge: `${Math.floor(Math.random() * 20 + 5)}m ago`,
+      demandImpactScore: Math.min(demandImpact, 100),
+      ifApproved: {
+        shortageDate: projectedAfter < 200 ? "~3 days" : projectedAfter < 500 ? "~8 days" : ">14 days",
+        riskIncrease: riskLevel === "critical" ? 34 : riskLevel === "moderate" ? 12 : 3,
+      },
+      ifSplit: {
+        riskReduction: riskLevel === "critical" ? 41 : riskLevel === "moderate" ? 22 : 8,
+        newProjection: Math.round(projectedAfter + qty * 0.4),
+      },
+      ifDelayed: {
+        demandDrift: Math.round((Math.random() * 8 + 2) * 10) / 10,
+        seasonalAdj: Math.round((Math.random() * 5 - 2) * 10) / 10,
+      },
+      confidence: Math.round(88 + Math.random() * 10),
+    };
+  });
+}
 
 /* ── Severity color map ── */
 const severityBar: Record<string, string> = {
@@ -187,29 +191,50 @@ const Requests = ({ initialIntakeOpen = false }: RequestsProps) => {
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(initialIntakeOpen);
 
+  const { data: requestsData = [] } = useQuery({
+    queryKey: ["requests"],
+    queryFn: getRequests
+  });
+  const requests = requestsData?.requests || requestsData?.data || requestsData || [];
+
+  const { data: inventoryData = [] } = useQuery({
+    queryKey: ["inventory"],
+    queryFn: getInventory
+  });
+  const inventoryItems = inventoryData?.items || inventoryData?.data || inventoryData || [];
+
+  useEffect(() => {
+    console.log("DATA LOADED:", ["requests"], requests);
+  }, [requests]);
+
+  const enrichedRequests = useMemo(() =>
+    enrichRequests(requests, inventoryItems),
+    [requests, inventoryItems]
+  );
+
   const metrics = useMemo(() => {
     const total = enrichedRequests.length;
     const mlFlagged = enrichedRequests.filter(r => r.riskLevel === "critical" || r.riskLevel === "moderate").length;
     const shortageRisk = enrichedRequests.filter(r => r.riskLevel === "critical").length;
-    const avgImpact = Math.round(enrichedRequests.reduce((s, r) => s + r.demandImpactScore, 0) / total);
+    const avgImpact = total > 0 ? Math.round(enrichedRequests.reduce((s, r) => s + r.demandImpactScore, 0) / total) : 0;
     return { total, mlFlagged, shortageRisk, avgImpact };
-  }, []);
+  }, [enrichedRequests]);
 
   const selectedReq = enrichedRequests.find(r => r.id === selectedRow);
 
   const warehouseImpact = useMemo(() => {
     if (!selectedReq) return [];
     return mlZones.map(z => {
-      const items = inventoryItems.filter(i => i.zone === z);
-      const stock = items.reduce((s, i) => s + i.stock, 0);
-      const cap = items.reduce((s, i) => s + i.minStock * 3, 0) || 1;
+      const items = inventoryItems.filter((i: any) => i.zone === z);
+      const stock = items.reduce((s: number, i: any) => s + i.stock, 0);
+      const cap = items.reduce((s: number, i: any) => s + i.minStock * 3, 0) || 1;
       const base = Math.round((stock / cap) * 100);
       const afterApproval = selectedReq.zone === z
         ? Math.min(base + Math.round((selectedReq.requestedQty / cap) * 20), 100)
         : base;
       return { zone: z, utilization: base, afterApproval, sparkline: [base - 8, base - 3, base + 2, base] };
     });
-  }, [selectedRow]);
+  }, [selectedRow, inventoryItems, enrichedRequests]);
 
   const handleRowClick = (id: string) => {
     setExpandedRow(prev => prev === id ? null : id);
@@ -252,13 +277,11 @@ const Requests = ({ initialIntakeOpen = false }: RequestsProps) => {
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="relative flex h-1.5 w-1.5 shrink-0">
                         {item.pulse && (
-                          <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${
-                            item.status === "online" ? "bg-success" : item.status === "warning" ? "bg-amber" : "bg-destructive"
-                          }`} style={{ animationDuration: "2.5s" }} />
+                          <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${item.status === "online" ? "bg-success" : item.status === "warning" ? "bg-amber" : "bg-destructive"
+                            }`} style={{ animationDuration: "2.5s" }} />
                         )}
-                        <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
-                          item.status === "online" ? "bg-success" : item.status === "warning" ? "bg-amber" : "bg-destructive"
-                        }`} />
+                        <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${item.status === "online" ? "bg-success" : item.status === "warning" ? "bg-amber" : "bg-destructive"
+                          }`} />
                       </span>
                       <p className="text-xs font-medium text-foreground truncate">{item.value}</p>
                     </div>
@@ -301,9 +324,8 @@ const Requests = ({ initialIntakeOpen = false }: RequestsProps) => {
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.35, delay: idx * 0.05, ease: [0.25, 0.1, 0.25, 1] }}
                           onClick={() => handleRowClick(req.id)}
-                          className={`grid grid-cols-[40px_minmax(0,1fr)_70px_80px_70px_90px_100px_80px_120px_80px] gap-0 px-5 py-3 items-center cursor-pointer transition-all duration-200 relative group ${
-                            expandedRow === req.id ? "bg-muted/40" : "hover:bg-muted/20"
-                          }`}
+                          className={`grid grid-cols-[40px_minmax(0,1fr)_70px_80px_70px_90px_100px_80px_120px_80px] gap-0 px-5 py-3 items-center cursor-pointer transition-all duration-200 relative group ${expandedRow === req.id ? "bg-muted/40" : "hover:bg-muted/20"
+                            }`}
                           whileHover={{ y: -2 }}
                         >
                           {/* Severity Strip */}

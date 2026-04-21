@@ -9,8 +9,7 @@ const demandRequestSchema = new mongoose.Schema(
     category: String,
 
     zone: {
-      type: String,
-      enum: ["north", "south", "east", "west"]
+      type: String
     },
 
     warehouse: String,
@@ -24,6 +23,16 @@ const demandRequestSchema = new mongoose.Schema(
     lower_bound: Number,
     upper_bound: Number,
     risk_level: String,
+
+    status: {
+      type: String,
+      enum: ["PENDING", "PARTIAL", "FULFILLED"],
+      default: "PENDING"
+    },
+    fulfilledQuantity: {
+      type: Number,
+      default: 0
+    },
 
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

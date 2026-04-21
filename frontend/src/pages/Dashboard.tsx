@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { StatusDot } from "@/components/StatusDot";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,10 +9,8 @@ import {
   Tooltip as RechartsTooltip, ResponsiveContainer,
   BarChart, Bar, LineChart, Line,
 } from "recharts";
-import {
-  chartData7D, chartData30D, chartData90D,
-  inventoryItems, systemStatuses,
-} from "@/data/mock";
+import { useQuery } from "@tanstack/react-query";
+import { getInventory, getDemand, getDecisions } from "@/services/api";
 import { motion } from "framer-motion";
 import {
   Activity, AlertTriangle, Warehouse, Shield,
@@ -21,7 +19,6 @@ import {
 } from "lucide-react";
 
 type TimeRange = "7D" | "30D" | "90D";
-const chartMap = { "7D": chartData7D, "30D": chartData30D, "90D": chartData90D };
 
 const section = (delay: number) => ({
   initial: { opacity: 0, y: 12 } as const,
@@ -92,15 +89,60 @@ const featureTooltips: Record<string, string> = {
 
 const Dashboard = () => {
   const [range, setRange] = useState<TimeRange>("7D");
-  const data = chartMap[range];
 
-  const riskItems = useMemo(() =>
-    inventoryItems.filter(i => i.status === "critical" || i.status === "low"), []
-  );
+  const { data: inventoryData = [], error: invError } = useQuery({
+    queryKey: ["inventory"],
+    queryFn: getInventory
+  });
+  if (invError) {
+    console.error("Dashboard API error:", invError);
+  }
+  const inventoryItems = inventoryData?.items || inventoryData?.data || inventoryData || [];
+  const safeInventory = Array.isArray(inventoryItems) ? inventoryItems : [];
+
+  const { data: forecastQuery = [], error: demandError } = useQuery({
+    queryKey: ["demand"],
+    queryFn: getDemand
+  });
+  if (demandError) {
+    console.error("Dashboard API error:", demandError);
+  }
+  const forecastRaw = forecastQuery?.demand || forecastQuery?.data || forecastQuery || [];
+
+  const { data: decisionsData = [], error: decisionsError } = useQuery({
+    queryKey: ["decisions"],
+    queryFn: getDecisions
+  });
+  if (decisionsError) {
+    console.error("Dashboard API error:", decisionsError);
+  }
+  const reorderData = decisionsData?.decisions || decisionsData?.data || decisionsData || [];
+
+  useEffect(() => {
+    console.log("DATA LOADED:", ["inventory"], inventoryData);
+    console.log("DATA LOADED:", ["demand"], forecastQuery);
+    console.log("DATA LOADED:", ["decisions"], decisionsData);
+  }, [inventoryData, forecastQuery, decisionsData]);
+
+  // Build chart data from API forecast, falling back to empty array
+  const data = useMemo(() => {
+    if (!forecastRaw || !Array.isArray(forecastRaw) || forecastRaw.length === 0) return [];
+    // Use all forecast data regardless of range selector for now
+    return forecastRaw.map((d: any, i: number) => ({
+      date: d.date || d.day || `Day ${i + 1}`,
+      orders: d.orders ?? d.predicted_demand ?? d.demand ?? 0,
+      revenue: d.revenue ?? 0,
+      inventory: d.inventory ?? 0,
+    }));
+  }, [forecastRaw]);
+
+  // Use backend reorder decisions for risk items instead of frontend filtering
+  const riskItems = reorderData;
+  const safeRisk = Array.isArray(riskItems) ? riskItems : [];
 
   // Derive forecast metrics from existing data
   const totalForecastedDemand = useMemo(() =>
-    chartData7D.reduce((sum, d) => sum + d.orders, 0), []
+    data.reduce((sum: number, d: any) => sum + (d.orders ?? 0), 0), [data]
   );
   const prevWeekDemand = useMemo(() =>
     Math.round(totalForecastedDemand * 0.92), [totalForecastedDemand]
@@ -108,14 +150,6 @@ const Dashboard = () => {
   const demandChange = useMemo(() =>
     +(((totalForecastedDemand - prevWeekDemand) / prevWeekDemand) * 100).toFixed(1),
     [totalForecastedDemand, prevWeekDemand]
-  );
-
-  const totalCapacity = useMemo(() =>
-    inventoryItems.reduce((s, i) => s + i.minStock * 3, 0), []
-  );
-  const demandPressure = useMemo(() =>
-    Math.min(Math.round((totalForecastedDemand / totalCapacity) * 100), 100),
-    [totalForecastedDemand, totalCapacity]
   );
 
   const sparklineData = useMemo(() =>
@@ -148,23 +182,36 @@ const Dashboard = () => {
     }),
     [data]
   );
+  const safeForecast = Array.isArray(forecastData) ? forecastData : [];
+
+  // Derive demand pressure from forecastData totals
+  const forecastTotal = useMemo(() =>
+    safeForecast.reduce((sum: number, d: any) => sum + (d.actual ?? d.forecast ?? 0), 0), [safeForecast]
+  );
+  const totalCapacity = useMemo(() =>
+    safeInventory.reduce((s: number, i: any) => s + (i.minStock || 0) * 3, 0), [safeInventory]
+  );
+  const demandPressure = useMemo(() =>
+    totalCapacity > 0 ? Math.min(Math.round((forecastTotal / totalCapacity) * 100), 100) : 0,
+    [forecastTotal, totalCapacity]
+  );
 
   // Warehouse zone intelligence
   const zones = ["Zone A", "Zone B", "Zone C", "Zone D"];
   const warehouseData = useMemo(() =>
     zones.map(zone => {
-      const items = inventoryItems.filter(i => i.zone === zone);
-      const totalStock = items.reduce((s, i) => s + i.stock, 0);
-      const capacity = items.reduce((s, i) => s + i.minStock * 3, 0);
+      const items = safeInventory.filter((i: any) => i.zone === zone);
+      const totalStock = items.reduce((s: number, i: any) => s + (i.stock || 0), 0);
+      const capacity = items.reduce((s: number, i: any) => s + (i.minStock || 0) * 3, 0);
       const utilization = capacity > 0 ? Math.round((totalStock / capacity) * 100) : 0;
-      const hasAlert = items.some(i => i.status === "critical" || i.status === "low");
+      const hasAlert = items.some((i: any) => i.status === "critical" || i.status === "low");
       const sparkline = [65, 72, 68, 74, utilization, Math.min(utilization + 3, 100)];
       return { zone, items: items.length, totalStock, capacity, utilization, hasAlert, sparkline };
     }),
-    []
+    [safeInventory]
   );
 
-  const riskLevel = riskItems.length > 2 ? "Elevated" : riskItems.length > 0 ? "Moderate" : "Low";
+  const riskLevel = safeRisk.length > 2 ? "Elevated" : safeRisk.length > 0 ? "Moderate" : "Low";
   const riskStatus = riskLevel === "Low" ? "online" : riskLevel === "Moderate" ? "warning" : "critical";
 
   const tooltipStyle = {
@@ -193,23 +240,20 @@ const Dashboard = () => {
               ].map((item, i) => (
                 <div
                   key={i}
-                  className={`flex items-center gap-2.5 px-5 py-2.5 flex-1 min-w-0 ${
-                    i > 0 ? "border-l border-border/40" : ""
-                  }`}
+                  className={`flex items-center gap-2.5 px-5 py-2.5 flex-1 min-w-0 ${i > 0 ? "border-l border-border/40" : ""
+                    }`}
                 >
                   <item.icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <div className="min-w-0">
                     <p className="text-[10px] text-muted-foreground tracking-wider uppercase leading-none">{item.label}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="relative flex h-1.5 w-1.5 shrink-0">
-                        <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                          item.status === "online" ? "bg-success animate-ping" :
+                        <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${item.status === "online" ? "bg-success animate-ping" :
                           item.status === "warning" ? "bg-amber animate-ping" : "bg-destructive animate-ping"
-                        }`} style={{ animationDuration: "2s" }} />
-                        <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
-                          item.status === "online" ? "bg-success" :
+                          }`} style={{ animationDuration: "2s" }} />
+                        <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${item.status === "online" ? "bg-success" :
                           item.status === "warning" ? "bg-amber" : "bg-destructive"
-                        }`} />
+                          }`} />
                       </span>
                       <p className="text-xs font-medium text-foreground truncate">{item.value}</p>
                     </div>
@@ -288,28 +332,28 @@ const Dashboard = () => {
               {/* SKUs At Risk */}
               <motion.div {...cardHover}>
                 <Card className="border-border/40 bg-card shadow-card overflow-hidden relative">
-                  <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${riskItems.length > 0 ? "bg-destructive" : "bg-success"}`} />
+                  <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${safeRisk.length > 0 ? "bg-destructive" : "bg-success"}`} />
                   <CardContent className="p-5">
                     <p className="text-[10px] text-muted-foreground tracking-wider uppercase mb-3">
                       SKUs At Risk · Next 7D
                     </p>
                     <p className="text-[28px] font-display font-bold text-foreground leading-none tracking-tight">
-                      {riskItems.length}
+                      {safeRisk.length}
                     </p>
                     <div className="flex items-center gap-2 mt-3">
-                      {inventoryItems.filter(i => i.status === "critical").length > 0 && (
+                      {safeInventory.filter((i: any) => i.status === "critical").length > 0 && (
                         <div className="flex items-center gap-1">
                           <div className="h-2.5 w-5 rounded-sm bg-destructive/80" />
                           <span className="text-[10px] text-muted-foreground">
-                            {inventoryItems.filter(i => i.status === "critical").length} critical
+                            {safeInventory.filter((i: any) => i.status === "critical").length} critical
                           </span>
                         </div>
                       )}
-                      {inventoryItems.filter(i => i.status === "low").length > 0 && (
+                      {safeInventory.filter((i: any) => i.status === "low").length > 0 && (
                         <div className="flex items-center gap-1">
                           <div className="h-2.5 w-5 rounded-sm bg-amber/80" />
                           <span className="text-[10px] text-muted-foreground">
-                            {inventoryItems.filter(i => i.status === "low").length} low
+                            {safeInventory.filter((i: any) => i.status === "low").length} low
                           </span>
                         </div>
                       )}
@@ -396,7 +440,7 @@ const Dashboard = () => {
 
                 <div className="px-6 pb-2">
                   <ResponsiveContainer width="100%" height={340}>
-                    <AreaChart data={forecastData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <AreaChart data={safeForecast} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                       <defs>
                         <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.08} />
@@ -446,8 +490,8 @@ const Dashboard = () => {
               </div>
               <Card className="border-border/40 bg-card shadow-card h-[calc(100%-32px)]">
                 <CardContent className="p-4 space-y-3">
-                  {riskItems.length > 0 ? (
-                    riskItems.map((item, i) => (
+                  {safeRisk.length > 0 ? (
+                    safeRisk.map((item, i) => (
                       <motion.div
                         key={item.id}
                         initial={{ opacity: 0, x: -8 }}
@@ -459,11 +503,10 @@ const Dashboard = () => {
                         <div className="py-3 pr-4 flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <p className="text-sm font-medium text-foreground truncate">{item.product}</p>
-                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                              item.status === "critical"
-                                ? "bg-destructive/10 text-destructive"
-                                : "bg-amber/10 text-amber"
-                            }`}>
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${item.status === "critical"
+                              ? "bg-destructive/10 text-destructive"
+                              : "bg-amber/10 text-amber"
+                              }`}>
                               {item.status}
                             </span>
                           </div>

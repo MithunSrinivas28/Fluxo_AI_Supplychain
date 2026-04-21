@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingCart, Package, ShieldCheck, User } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Package, ShieldCheck, User, Sparkles } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
@@ -16,6 +16,7 @@ import {
 
 const navItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, roles: ["admin", "retailer", "warehouse"] },
+  { title: "Insights", url: "/insights", icon: Sparkles, roles: ["admin", "retailer", "warehouse"] },
   { title: "Requests", url: "/requests", icon: ShoppingCart, roles: ["admin", "retailer"] },
   { title: "Inventory", url: "/inventory", icon: Package, roles: ["admin", "warehouse"] },
   { title: "Company Settings", url: "/admin", icon: ShieldCheck, roles: ["admin"] },

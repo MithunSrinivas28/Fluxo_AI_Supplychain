@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { inventoryItems as initialItems, warehousesByZone } from "@/data/mock";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getInventory, createInventory } from "@/services/api";
 import type { InventoryItem, InventoryTransaction } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -48,12 +49,30 @@ const section = (delay: number) => ({
   transition: { duration: 0.4, delay, ease: [0.25, 0.1, 0.25, 1] as const },
 });
 
+const warehousesByZone: Record<string, string[]> = {
+  "Zone A": ["Warehouse A1", "Warehouse A2"],
+  "Zone B": ["Warehouse B1"],
+  "Zone C": ["Warehouse C1", "Warehouse C2"],
+  "Zone D": ["Warehouse D1"],
+};
+
 /* ──────────── component ──────────── */
 const Inventory = () => {
+  const queryClient = useQueryClient();
   const zones = Object.keys(warehousesByZone);
   const [selectedZone, setSelectedZone] = useState<string>("all");
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
-  const [items, setItems] = useState<InventoryItem[]>(initialItems);
+
+  const { data = [], isLoading } = useQuery({
+    queryKey: ["inventory"],
+    queryFn: getInventory
+  });
+  const safeInventory = Array.isArray(data) ? data : [];
+
+  useEffect(() => {
+    console.log("DATA LOADED:", ["inventory"], data);
+  }, [data]);
+
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [adjustModal, setAdjustModal] = useState<{ open: boolean; item: InventoryItem | null; mode: "add" | "remove" | "threshold" | "delete" }>({ open: false, item: null, mode: "add" });
@@ -63,7 +82,7 @@ const Inventory = () => {
   const warehouses = selectedZone === "all" ? Object.values(warehousesByZone).flat() : (warehousesByZone[selectedZone] ?? []);
 
   const filtered = useMemo(() => {
-    let list = items;
+    let list = safeInventory;
     if (selectedZone !== "all") list = list.filter(i => i.zone === selectedZone);
     if (selectedWarehouse !== "all") list = list.filter(i => i.warehouse === selectedWarehouse);
     if (searchQuery) {
@@ -71,7 +90,7 @@ const Inventory = () => {
       list = list.filter(i => i.product.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q));
     }
     return list;
-  }, [items, selectedZone, selectedWarehouse, searchQuery]);
+  }, [safeInventory, selectedZone, selectedWarehouse, searchQuery]);
 
   const totalSKUs = filtered.length;
   const totalUnits = filtered.reduce((s, i) => s + i.stock, 0);
@@ -79,66 +98,58 @@ const Inventory = () => {
   const newCount = filtered.filter(i => i.status === "new").length;
 
   /* ── stock adjustment ── */
-  const handleAdjust = () => {
+  const handleAdjust = async () => {
     if (!adjustModal.item) return;
     const qty = parseInt(adjustQty);
     if (isNaN(qty) || qty <= 0) return;
     const id = adjustModal.item.id;
 
-    setItems(prev => prev.map(item => {
-      if (item.id !== id) return item;
-      let newStock = item.stock;
-      let newMin = item.minStock;
+    try {
       let txType: InventoryTransaction["type"] = "adjustment";
       let txSource = "Manual Adjustment";
       let txQty = qty;
+      let newStock = adjustModal.item.stock;
+      let newMin = adjustModal.item.minStock;
 
       if (adjustModal.mode === "add") {
-        newStock = item.stock + qty;
         txType = "inbound";
         txSource = "Manual Inbound";
+        newStock += qty;
       } else if (adjustModal.mode === "remove") {
-        newStock = Math.max(0, item.stock - qty);
         txType = "outbound";
         txSource = "Outbound (Sale)";
         txQty = -qty;
+        newStock = Math.max(0, newStock - qty);
       } else if (adjustModal.mode === "threshold") {
-        newMin = qty;
         txSource = `Threshold updated to ${qty}`;
         txQty = 0;
+        newMin = qty;
       }
 
-      const tx: InventoryTransaction = {
-        id: `TX-${Date.now()}`,
-        date: new Date().toISOString(),
+      await createInventory({
+        productId: id,
         type: txType,
         source: txSource,
         quantity: txQty,
-        updatedBy: "Warehouse Manager",
-      };
+        newStock,
+        newMin
+      });
 
-      const updated: InventoryItem = {
-        ...item,
-        stock: newStock,
-        minStock: newMin,
-        lastUpdated: new Date().toISOString(),
-        transactions: [tx, ...item.transactions],
-        status: computeStatus(newStock, newMin, item.addedDate),
-      };
-      return updated;
-    }));
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
 
-    // highlight row briefly
-    setHighlightedRows(prev => new Set(prev).add(id));
-    setTimeout(() => setHighlightedRows(prev => { const n = new Set(prev); n.delete(id); return n; }), 2000);
+      // highlight row briefly
+      setHighlightedRows(prev => new Set(prev).add(id));
+      setTimeout(() => setHighlightedRows(prev => { const n = new Set(prev); n.delete(id); return n; }), 2000);
 
-    setAdjustModal({ open: false, item: null, mode: "add" });
-    setAdjustQty("");
+      setAdjustModal({ open: false, item: null, mode: "add" });
+      setAdjustQty("");
+    } catch (err) {
+      console.error("Failed to adjust inventory", err);
+    }
   };
 
   const handleDelete = () => {
     if (!adjustModal.item) return;
-    setItems(prev => prev.filter(i => i.id !== adjustModal.item!.id));
     setAdjustModal({ open: false, item: null, mode: "add" });
   };
 

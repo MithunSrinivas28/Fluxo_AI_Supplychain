@@ -4,7 +4,10 @@ const inventorySchema = new mongoose.Schema(
   {
     warehouseZone: {
       type: String,
-      enum: ["north", "south", "east", "west"],
+      required: true
+    },
+    sku: {
+      type: String,
       required: true
     },
     product: {

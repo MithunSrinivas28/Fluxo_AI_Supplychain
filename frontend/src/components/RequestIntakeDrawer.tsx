@@ -19,11 +19,19 @@ import {
   CalendarIcon, Upload, FileText, MessageSquare, Cpu,
   AlertTriangle, CheckCircle2, XCircle, ArrowRight, Sparkles,
 } from "lucide-react";
-import { inventoryItems } from "@/data/mock";
-import { products as productCatalog } from "@/data/products";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getInventory, createRequest, parseNLP } from "@/services/api";
 
 /* ── Types ── */
 type InputMode = "structured" | "bulk" | "natural";
+
+interface RequestPayload {
+  sku: string;
+  requested_quantity: number;
+  zone: string;
+  warehouse?: string;
+  priority?: string;
+}
 
 interface MLPreview {
   predictedWeeklyDemand: number;
@@ -47,7 +55,6 @@ interface BulkRow {
 }
 
 /* ── Constants ── */
-const products = productCatalog.map(p => ({ id: p.id, name: p.name, sku: p.sku, category: p.category }));
 const zones = ["Zone A", "Zone B", "Zone C", "Zone D"];
 const warehousesByZone: Record<string, string[]> = {
   "Zone A": ["WH-A1", "WH-A2", "WH-A3"],
@@ -81,7 +88,14 @@ interface RequestIntakeDrawerProps {
 }
 
 export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerProps) => {
+  const queryClient = useQueryClient();
   const [mode, setMode] = useState<InputMode>("structured");
+
+  const { data: inventoryData = [] } = useQuery({
+    queryKey: ["inventory"],
+    queryFn: getInventory
+  });
+  const inventoryItems = Array.isArray(inventoryData) ? inventoryData : [];
 
   // Structured form state
   const [product, setProduct] = useState("");
@@ -102,18 +116,19 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
   // NL state
   const [nlText, setNlText] = useState("");
   const [nlParsed, setNlParsed] = useState<Record<string, string> | null>(null);
+  const [nlIsParsing, setNlIsParsing] = useState(false);
 
   const category = useMemo(() => {
-    const p = products.find(p => p.id === product);
+    const p = inventoryItems.find((p: any) => p.sku === product);
     return p?.category ?? "";
-  }, [product]);
+  }, [product, inventoryItems]);
 
   const availableWarehouses = useMemo(() =>
     zone ? warehousesByZone[zone] ?? [] : []
-  , [zone]);
+    , [zone]);
 
   const simulateMLPreview = useCallback(() => {
-    const inv = inventoryItems.find(i => i.id === product);
+    const inv = inventoryItems.find((i: any) => i.sku === product);
     const stock = inv?.stock ?? 500;
     const qty = parseInt(quantity) || 0;
     const projected = Math.max(stock - qty, 0);
@@ -131,7 +146,7 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
       confidence: Math.round(88 + Math.random() * 10),
     });
     setShowPreview(true);
-  }, [product, quantity]);
+  }, [product, quantity, inventoryItems]);
 
   const handleBulkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -147,15 +162,25 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
     setBulkRows(simulated);
   };
 
-  const handleNLParse = () => {
-    setNlParsed({
-      Product: "Eggs",
-      Quantity: "1200",
-      Zone: "Zone A",
-      Warehouse: "WH-A1 (suggested)",
-      "Delivery Date": "2026-03-08",
-      "Festival Flag": "No",
-    });
+  const handleNLParse = async () => {
+    setNlIsParsing(true);
+    try {
+      const parsed = await parseNLP(nlText);
+      const match = inventoryItems.find((i: any) => i.product.toLowerCase().includes((parsed.product || "").toLowerCase()));
+      
+      setNlParsed({
+        Product: match?.product || parsed.product || "Unknown",
+        SKU: match?.sku || "",
+        Quantity: parsed.quantity ? parsed.quantity.toString() : "0",
+        Zone: parsed.zone || "Unknown",
+        Warehouse: "Auto-assign",
+        "Delivery Date": "ASAP"
+      });
+    } catch (err) {
+      console.error("Failed to parse NLP via backend", err);
+    } finally {
+      setNlIsParsing(false);
+    }
   };
 
   const resetForm = () => {
@@ -166,9 +191,46 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
     setNlText(""); setNlParsed(null);
   };
 
-  const handleSubmit = () => {
-    resetForm();
-    onOpenChange(false);
+  const handleSubmit = async () => {
+    try {
+      if (mode === "structured") {
+        const selectedProduct = inventoryItems.find((p: any) => p.sku === product);
+        const payload = {
+          sku: selectedProduct?.sku || "",
+          zone: zone.toLowerCase().replace(" ", ""),
+          warehouse: warehouse,
+          requested_quantity: Number(quantity) || 0,
+          discount_percent: Number(discount) || 0,
+          is_festival: festival ? 1 : 0,
+          order_date: deliveryDate ? format(deliveryDate, "yyyy-MM-dd") : new Date().toISOString()
+        };
+        console.log("REQUEST PAYLOAD:", payload);
+        await createRequest(payload);
+      } else if (mode === "bulk") {
+        // Submit valid bulk rows
+        const validRows = bulkRows.filter(r => r.valid);
+        for (const row of validRows) {
+          await createRequest(row);
+        }
+      } else if (mode === "natural" && nlParsed) {
+          await createRequest({
+              sku: nlParsed.SKU || "EGG-001",
+              zone: nlParsed.Zone.toLowerCase().replace(" ", ""),
+              warehouse: nlParsed.Warehouse === "Auto-assign" ? "" : nlParsed.Warehouse,
+              requested_quantity: parseInt(nlParsed.Quantity) || 0,
+              discount_percent: 0,
+              is_festival: 0,
+              order_date: new Date().toISOString()
+          });
+      }
+      queryClient.invalidateQueries({ queryKey: ["requests"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["decisions"] });
+      resetForm();
+      onOpenChange(false);
+    } catch (err) {
+      console.error("Submission failed", err);
+    }
   };
 
   const isFormValid = product && quantity && zone && warehouse && deliveryDate;
@@ -234,8 +296,8 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
                       <SelectValue placeholder="Select product" />
                     </SelectTrigger>
                     <SelectContent>
-                      {products.map(p => (
-                        <SelectItem key={p.id} value={p.id}>
+                      {inventoryItems.map((p: any) => (
+                        <SelectItem key={p.sku} value={p.sku}>
                           <span className="flex items-center gap-2">
                             {p.name}
                             <span className="text-[10px] text-muted-foreground font-mono">{p.sku}</span>
@@ -521,12 +583,12 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
                 <motion.div {...fieldAnim(2)}>
                   <Button
                     onClick={handleNLParse}
-                    disabled={nlText.trim().length < 10}
+                    disabled={nlText.trim().length < 10 || nlIsParsing}
                     variant="outline"
                     className="w-full h-10 gap-2 text-sm font-medium border-border/40"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
-                    Parse Request
+                    {nlIsParsing ? "Extracting JSON Intent..." : "Parse Request via LLM"}
                   </Button>
                 </motion.div>
 

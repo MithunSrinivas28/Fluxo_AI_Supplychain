@@ -12,22 +12,33 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem("user");
+    return saved ? JSON.parse(saved) : null;
+  });
 
   const login = useCallback((email: string, _password: string, role: UserRole) => {
-    setUser({
+    const u = {
       id: "usr-001",
       name: email.split("@")[0],
       email,
       role,
-    });
+    };
+    setUser(u);
+    localStorage.setItem("user", JSON.stringify(u));
   }, []);
 
   const register = useCallback((name: string, email: string, _password: string, role: UserRole) => {
-    setUser({ id: "usr-001", name, email, role });
+    const u = { id: "usr-001", name, email, role };
+    setUser(u);
+    localStorage.setItem("user", JSON.stringify(u));
   }, []);
 
-  const logout = useCallback(() => setUser(null), []);
+  const logout = useCallback(() => {
+    setUser(null);
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, register, logout }}>

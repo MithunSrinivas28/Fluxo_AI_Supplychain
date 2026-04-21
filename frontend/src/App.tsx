@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { UISettingsProvider } from "@/context/UISettingsContext";
 import { CompanyProvider } from "@/context/CompanyContext";
+import { useEffect } from "react";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
@@ -14,6 +15,8 @@ import Inventory from "./pages/Inventory";
 import Admin from "./pages/Admin";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import Insights from "./pages/Insights";
+import { pingHealth } from "@/services/api";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +38,7 @@ const AppRoutes = () => {
       <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
       <Route path="/inventory/:warehouseId" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
       <Route path="/inventory/:warehouseId/:productId" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
+      <Route path="/insights" element={<ProtectedRoute><Insights /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
@@ -42,22 +46,30 @@ const AppRoutes = () => {
   );
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <UISettingsProvider>
-      <CompanyProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <AuthProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-        </AuthProvider>
-      </TooltipProvider>
-      </CompanyProvider>
-    </UISettingsProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  useEffect(() => {
+    pingHealth()
+      .then(() => console.log("Backend reachable"))
+      .catch(err => console.error("Backend unreachable:", err));
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <UISettingsProvider>
+        <CompanyProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <AuthProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </AuthProvider>
+        </TooltipProvider>
+        </CompanyProvider>
+      </UISettingsProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
