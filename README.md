@@ -66,8 +66,8 @@ Triple XGBoost quantile regression models (median, lower bound, upper bound) gen
 ### 💬 Natural Language Request Intake
 Type *"Ship 1200 units of rice to Zone B, festival period"* — the Groq-powered LLM (Llama 3) extracts structured JSON (`product`, `quantity`, `zone`) and feeds it directly into the ML pipeline. No forms needed.
 
-### 📊 RAG-Powered Analytics Chat
-An AI analyst backed by **Retrieval-Augmented Generation** over 4MB of synthetic supply chain data. Ask questions like *"Which zone has the highest demand during festivals?"* and get data-grounded answers with actual numbers.
+### 📊 Context Aware chatbot
+An AI analyst backed by over 4MB of synthetic supply chain data. Ask questions like *"Which zone has the highest demand during festivals?"* and get data-grounded answers with actual numbers.
 
 ### 🔐 Role-Based Access Control
 Three roles with enforced permissions at both API and UI layers:
