@@ -65,9 +65,11 @@ let lower_bound = 0;
 let upper_bound = 0;
 
 try {
+  const mlUrl = process.env.ML_SERVICE_URL || "http://localhost:8001";
   const response = await axios.post(
-    "http://localhost:8000/predict",
-    mlPayload
+    `${mlUrl}/predict`,
+    mlPayload,
+    { timeout: 10000 }
   );
 
   forecast = response.data.forecast;

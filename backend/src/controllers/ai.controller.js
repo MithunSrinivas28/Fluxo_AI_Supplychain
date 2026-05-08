@@ -4,29 +4,35 @@ import { DemandRequest } from "../models/demandRequest.model.js";
 export const chatWithAI = async (req, res) => {
   try {
     const { message, history } = req.body;
-    console.log("AI REQUEST:", req.body);
 
     const inventories = await Inventory.find().sort({ stockLevel: 1 }).limit(10).lean();
     const recentRequests = await DemandRequest.find().sort({ createdAt: -1 }).limit(10).lean();
     
-    // Prevent LLM context overload by filtering strictly to highest-priority alerts
     const backend_context = {
       lowStock: inventories,
       recentRequests
     };
 
-    const response = await fetch("http://localhost:8000/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ message, history, backend_context })
-    });
+    const ragUrl = process.env.RAG_SERVICE_URL || "http://localhost:8000";
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
 
-    const data = await response.json();
-    console.log("FASTAPI RESPONSE:", data);
+    try {
+      const response = await fetch(`${ragUrl}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, history, backend_context }),
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
 
-    return res.json(data);
+      const data = await response.json();
+      return res.json(data);
+    } catch (fetchErr) {
+      clearTimeout(timeout);
+      console.error("RAG Service unreachable:", fetchErr.message);
+      return res.status(503).json({ error: "AI service unavailable" });
+    }
   } catch (error) {
     console.error("AI Service Error:", error);
     return res.status(500).json({ error: "AI service failed" });

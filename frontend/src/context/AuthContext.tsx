@@ -4,8 +4,7 @@ import type { User, UserRole } from "@/types";
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string, role: UserRole) => void;
-  register: (name: string, email: string, password: string, role: UserRole) => void;
+  login: (userData: { id: string; name: string; email: string; role: UserRole }, token: string) => void;
   logout: () => void;
 }
 
@@ -17,21 +16,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved ? JSON.parse(saved) : null;
   });
 
-  const login = useCallback((email: string, _password: string, role: UserRole) => {
-    const u = {
-      id: "usr-001",
-      name: email.split("@")[0],
-      email,
-      role,
-    };
-    setUser(u);
-    localStorage.setItem("user", JSON.stringify(u));
-  }, []);
-
-  const register = useCallback((name: string, email: string, _password: string, role: UserRole) => {
-    const u = { id: "usr-001", name, email, role };
-    setUser(u);
-    localStorage.setItem("user", JSON.stringify(u));
+  const login = useCallback((userData: { id: string; name: string; email: string; role: UserRole }, token: string) => {
+    setUser(userData);
+    localStorage.setItem("user", JSON.stringify(userData));
+    localStorage.setItem("token", token);
   }, []);
 
   const logout = useCallback(() => {
@@ -41,7 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

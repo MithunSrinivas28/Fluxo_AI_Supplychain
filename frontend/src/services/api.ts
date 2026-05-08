@@ -3,11 +3,10 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 async function handleResponse(res: Response) {
     const text = await res.text();
     try {
-        const data = JSON.parse(text);
-        return data?.data || data || [];
+        return JSON.parse(text);
     } catch (err) {
         console.error("Invalid JSON response:", text);
-        return [];
+        return { success: false, message: "Invalid server response" };
     }
 }
 
@@ -35,14 +34,12 @@ export async function loginUser(email: string, password: string) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password }),
         });
-        const data = await handleResponse(res);
-        if (!res.ok) throw new Error(data.message || data.error || "Login failed");
+        const json = await handleResponse(res);
+        if (!res.ok) throw new Error(json.message || json.error || "Login failed");
 
-        const token = data.data?.token ?? data.token;
-        if (token) {
-            localStorage.setItem("token", token);
-        }
-        return data;
+        // Backend returns { success, message, data: { token, user } }
+        const result = json.data || json;
+        return result;
     } catch (error) {
         console.error("API error:", error);
         throw error;
@@ -69,10 +66,11 @@ export async function registerUser(name: string, email: string, password: string
 export async function getInventory() {
     try {
         const res = await customFetch(`${API_BASE}/inventory`, { headers: getAuthHeaders() });
-        const data = await handleResponse(res);
-        if (!res.ok) throw new Error(data.message || data.error || "Inventory fetch failed");
+        const json = await handleResponse(res);
+        if (!res.ok) throw new Error(json.message || json.error || "Inventory fetch failed");
         
-        return Array.isArray(data) ? data.map((item: any) => ({
+        const items = json.data || [];
+        return Array.isArray(items) ? items.map((item: any) => ({
             id: item._id || item.id || Math.random().toString(),
             product: item.product || "Unknown Product",
             sku: item.sku || "UNKN-001",
@@ -94,9 +92,9 @@ export async function getInventory() {
 export async function getDemand() {
     try {
         const res = await customFetch(`${API_BASE}/demand`, { headers: getAuthHeaders() });
-        const data = await handleResponse(res);
-        if (!res.ok) throw new Error(data.message || data.error || "Demand fetch failed");
-        return data;
+        const json = await handleResponse(res);
+        if (!res.ok) throw new Error(json.message || json.error || "Demand fetch failed");
+        return json.data || [];
     } catch (error) {
         console.error("API error:", error);
         throw error;
@@ -106,15 +104,14 @@ export async function getDemand() {
 export async function getDecisions() {
     try {
         const res = await customFetch(`${API_BASE}/decision/reorder?region=global&category=all`, {
-            headers: {
-                Authorization: `Bearer ${localStorage.getItem("token")}`
-            }
+            headers: getAuthHeaders()
         });
         if (!res.ok) {
             console.warn("Decision fetch failed, returning empty suggestions");
             return [];
         }
-        return await handleResponse(res);
+        const json = await handleResponse(res);
+        return json.data || [];
     } catch (error) {
         console.error("API error:", error);
         return [];
@@ -124,9 +121,9 @@ export async function getDecisions() {
 export async function getRequests() {
     try {
         const res = await customFetch(`${API_BASE}/requests`, { headers: getAuthHeaders() });
-        const data = await handleResponse(res);
-        if (!res.ok) throw new Error(data.message || data.error || "Requests fetch failed");
-        return data;
+        const json = await handleResponse(res);
+        if (!res.ok) throw new Error(json.message || json.error || "Requests fetch failed");
+        return json.data || [];
     } catch (error) {
         console.error("API error:", error);
         throw error;

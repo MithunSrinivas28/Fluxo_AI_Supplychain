@@ -1,4 +1,31 @@
+# Dependencies
 node_modules/
-.env
 backend/node_modules/
 frontend/node_modules/
+
+# Environment files (NEVER commit secrets)
+.env
+.env.local
+.env.production.local
+backend/.env
+frontend/.env
+frontend/.env.local
+fluxo-rag/.env
+ml_service/.env
+
+# Build output
+frontend/dist/
+*.pyc
+__pycache__/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*

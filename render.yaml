@@ -1,0 +1,62 @@
+# Render Blueprint — Fluxo AI Supply Chain
+# Deploy all services from a single repo
+
+services:
+  # ─── Backend (Node.js Express) ───
+  - type: web
+    name: fluxo-backend
+    runtime: node
+    region: oregon
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 1d
+      - key: GROQ_API_KEY
+        sync: false
+      - key: ML_SERVICE_URL
+        sync: false
+      - key: RAG_SERVICE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://fluxo.vercel.app
+    healthCheckPath: /health
+
+  # ─── ML Service (FastAPI + XGBoost) ───
+  - type: web
+    name: fluxo-ml
+    runtime: python
+    region: oregon
+    rootDir: ml_service
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PORT
+        value: 8001
+    healthCheckPath: /health
+
+  # ─── RAG Service (FastAPI + Groq) ───
+  - type: web
+    name: fluxo-rag
+    runtime: python
+    region: oregon
+    rootDir: fluxo-rag
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+    healthCheckPath: /health

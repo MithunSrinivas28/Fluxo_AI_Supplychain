@@ -1,14 +1,27 @@
+import os
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import numpy as np
-import os
 
 app = FastAPI()
 
-# Load models (adjust filenames if needed)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Load models
 model_median = joblib.load("models/xgb_median.pkl")
 model_lower = joblib.load("models/xgb_lower.pkl")
 model_upper = joblib.load("models/xgb_upper.pkl")
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "ml-predict"}
+
 @app.post("/predict")
 def predict(data: dict):
 
@@ -90,3 +103,8 @@ def predict(data: dict):
         "lower_bound": float(lower_bound),
         "upper_bound": float(upper_bound)
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8001))
+    uvicorn.run(app, host="0.0.0.0", port=port)

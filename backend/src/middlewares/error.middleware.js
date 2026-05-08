@@ -1,8 +1,12 @@
 export const errorHandler = (err, req, res, next) => {
-  console.error(err);
+  const statusCode = err.statusCode || 500;
+  const message = err.message || "Server Error";
 
-  res.status(500).json({
+  // Log full error server-side
+  console.error(`[ERROR] ${req.method} ${req.path}:`, message);
+
+  res.status(statusCode).json({
     success: false,
-    message: err.message || "Server Error"
+    message: process.env.NODE_ENV === "production" ? "Internal server error" : message
   });
 };

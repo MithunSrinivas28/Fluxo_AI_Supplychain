@@ -3,6 +3,19 @@ import { User } from "../models/user.model.js";
 
 export const registerUser = async (data) => {
 
+  if (!data.name || data.name.trim().length < 1) {
+    throw new Error("Name is required");
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!data.email || !emailRegex.test(data.email)) {
+    throw new Error("Valid email is required");
+  }
+
+  if (!data.password || data.password.length < 6) {
+    throw new Error("Password must be at least 6 characters");
+  }
+
   const existingUser = await User.findOne({ email: data.email });
 
   if (existingUser) {

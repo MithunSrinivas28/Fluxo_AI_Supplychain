@@ -45,11 +45,13 @@ const Insights: React.FC = () => {
 
     try {
       console.log("SENDING MESSAGE:", trimmedText);
-      const BASE = import.meta.env.VITE_BACKEND_URL;
+      const BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const token = localStorage.getItem("token");
       const response = await fetch(`${BASE}/api/ai/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           message: trimmedText,

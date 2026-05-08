@@ -5,8 +5,6 @@ import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { UserRole } from "@/types";
 import { motion } from "framer-motion";
 import fluxoLogo from "@/assets/fluxo-logo.png";
 import { loginUser } from "@/services/api";
@@ -14,7 +12,6 @@ import { loginUser } from "@/services/api";
 const Login = () => {
   const [email, setEmail] = useState("admin@fluxo.ai");
   const [password, setPassword] = useState("password");
-  const [role, setRole] = useState<UserRole>("admin");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -26,9 +23,15 @@ const Login = () => {
     setLoading(true);
     try {
       const data = await loginUser(email, password);
-      // Set user state in AuthContext using the returned user info
-      const user = data.data?.user ?? data.user ?? { email, role };
-      login(user.email ?? email, password, (user.role as UserRole) ?? role);
+      const token = data.token;
+      const user = data.user;
+      if (!token || !user) {
+        throw new Error("Invalid response from server");
+      }
+      login(
+        { id: user.id || user._id, name: user.name, email: user.email, role: user.role },
+        token
+      );
       navigate("/");
     } catch (err: any) {
       setError(err.message || "Login failed. Please check your credentials.");
@@ -54,17 +57,6 @@ const Login = () => {
               <div className="space-y-1.5">
                 <Label htmlFor="password">Password</Label>
                 <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Role</Label>
-                <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="retailer">Retailer</SelectItem>
-                    <SelectItem value="warehouse">Warehouse</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Signing in…" : "Sign In"}
