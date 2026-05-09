@@ -18,6 +18,10 @@ frontend/dist/
 *.pyc
 __pycache__/
 
+# Python virtual environments
+.venv/
+venv/
+
 # OS files
 .DS_Store
 Thumbs.db
@@ -29,3 +33,9 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Vite temp files
+*.timestamp-*
+
+# Misc dev artifacts
+backend/.trigger
