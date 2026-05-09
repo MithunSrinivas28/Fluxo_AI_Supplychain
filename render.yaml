@@ -28,7 +28,7 @@ services:
       - key: RAG_SERVICE_URL
         sync: false
       - key: CORS_ORIGINS
-        value: https://fluxo.vercel.app
+        value: https://fluxoai-lovat.vercel.app
     healthCheckPath: /health
 
   # ─── ML Service (FastAPI + XGBoost) ───

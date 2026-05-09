@@ -13,18 +13,20 @@ import aiRoutes from "./routes/ai.routes.js";
 
 const app = express();
 
-// Security headers
-app.use(helmet());
-
-// CORS — env-driven origins
-const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173,http://localhost:5174,https://fluxo.vercel.app")
+// CORS — env-driven origins (must be before helmet so preflight OPTIONS succeeds)
+const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173,http://localhost:5174,https://fluxoai-lovat.vercel.app")
   .split(",")
   .map(o => o.trim());
 
 app.use(cors({
     origin: allowedOrigins,
-    credentials: true
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
 }));
+
+// Security headers
+app.use(helmet());
 
 // Body parser
 app.use(express.json({ limit: "1mb" }));
