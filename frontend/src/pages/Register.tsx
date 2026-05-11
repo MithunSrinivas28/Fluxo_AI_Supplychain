@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
 import fluxoLogo from "@/assets/fluxo-logo.png";
 import { registerUser } from "@/services/api";
+import { useAuth } from "@/context/AuthContext";
 
 const Register = () => {
   const [name, setName] = useState("");
@@ -15,15 +16,27 @@ const Register = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await registerUser(name, email, password);
-      // Registration successful — redirect to login
-      navigate("/login");
+      const data = await registerUser(name, email, password);
+      
+      const token = data.data?.token || data.token;
+      const user = data.data?.user || data.user;
+      
+      if (token && user) {
+        login(
+          { id: user.id || user._id, name: user.name, email: user.email, role: user.role },
+          token
+        );
+        navigate("/");
+      } else {
+        navigate("/login");
+      }
     } catch (err: any) {
       setError(err.message || "Registration failed. Please try again.");
     } finally {
