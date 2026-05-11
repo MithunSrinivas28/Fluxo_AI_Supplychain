@@ -31,9 +31,11 @@ export const protect = async (req, res, next) => {
     next();
 
   } catch (error) {
+    console.error(`[AUTH] Token verification failed:`, error.message);
+    const message = error.name === "TokenExpiredError" ? "Token expired" : "Invalid token";
     return res.status(401).json({
       success: false,
-      message: "Invalid or expired token"
+      message
     });
   }
 };
@@ -41,6 +43,7 @@ export const protect = async (req, res, next) => {
 export const authorize = (...roles) => {
   return (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
+      console.warn(`[AUTH] Access denied for user ${req.user?._id || "unknown"}. Required role: ${roles.join(" or ")}, got: ${req.user?.role || "none"}`);
       return res.status(403).json({
         success: false,
         message: `Access denied. Required role: ${roles.join(" or ")}`

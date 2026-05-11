@@ -12,7 +12,12 @@ async function handleResponse(res: Response) {
 
 const customFetch = async (url: string, options?: any) => {
     console.log("API CALL:", url, { method: options?.method || 'GET', body: options?.body });
-    return fetch(url, options);
+    const res = await fetch(url, options);
+    if (res.status === 401) {
+        localStorage.removeItem("token");
+        window.dispatchEvent(new Event("auth-expired"));
+    }
+    return res;
 };
 
 function getAuthHeaders(): HeadersInit {

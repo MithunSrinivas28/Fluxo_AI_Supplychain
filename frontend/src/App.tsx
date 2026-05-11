@@ -32,6 +32,13 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const RoleRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) => {
+  const { isAuthenticated, user } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!user || !allowedRoles.includes(user.role)) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
 const AppRoutes = () => {
   const { isAuthenticated } = useAuth();
   return (
@@ -40,11 +47,11 @@ const AppRoutes = () => {
       <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
-      <Route path="/requests/new" element={<ProtectedRoute><Requests initialIntakeOpen /></ProtectedRoute>} />
-      <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
-      <Route path="/inventory/:warehouseId" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
-      <Route path="/inventory/:warehouseId/:productId" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
+      <Route path="/requests" element={<RoleRoute allowedRoles={["admin", "retailer"]}><Requests /></RoleRoute>} />
+      <Route path="/requests/new" element={<RoleRoute allowedRoles={["admin", "retailer"]}><Requests initialIntakeOpen /></RoleRoute>} />
+      <Route path="/inventory" element={<RoleRoute allowedRoles={["admin", "warehouse"]}><Inventory /></RoleRoute>} />
+      <Route path="/inventory/:warehouseId" element={<RoleRoute allowedRoles={["admin", "warehouse"]}><Inventory /></RoleRoute>} />
+      <Route path="/inventory/:warehouseId/:productId" element={<RoleRoute allowedRoles={["admin", "warehouse"]}><Inventory /></RoleRoute>} />
       <Route path="/insights" element={<ProtectedRoute><Insights /></ProtectedRoute>} />
       <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />

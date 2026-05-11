@@ -34,7 +34,9 @@ export const registerUser = async (data) => {
   const token = jwt.sign(
     {
       userId: user._id,
-      role: user.role
+      role: user.role,
+      name: user.name,
+      email: user.email
     },
     process.env.JWT_SECRET,
     {
@@ -70,7 +72,9 @@ export const loginUser = async (data) => {
   const token = jwt.sign(
     {
       userId: user._id,
-      role: user.role
+      role: user.role,
+      name: user.name,
+      email: user.email
     },
     process.env.JWT_SECRET,
     {
