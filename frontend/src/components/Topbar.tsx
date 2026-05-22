@@ -45,9 +45,16 @@ export const Topbar = ({ title }: TopbarProps) => {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <div className="px-2 py-1.5">
+            <div className="px-2 py-1.5 space-y-1.5">
               <p className="text-sm font-medium text-foreground truncate">{user?.name}</p>
-              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                {user?.role && (
+                  <span className="text-[9px] font-mono font-medium tracking-wider uppercase px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                    {user.role}
+                  </span>
+                )}
+              </div>
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate("/profile")} className="gap-2 text-xs cursor-pointer">

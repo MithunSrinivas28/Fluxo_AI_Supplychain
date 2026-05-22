@@ -151,7 +151,9 @@ export const getRequests = async (user) => {
   }
 
   if (user.role === "warehouse") {
-    filter = { warehouse: user.zone };
+    // Warehouse users don't have a specific zone tied to their User record yet.
+    // They can view all operational requests for inventory planning.
+    filter = {};
   }
 
   // Admin sees all

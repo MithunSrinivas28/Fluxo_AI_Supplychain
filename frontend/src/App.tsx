@@ -15,6 +15,7 @@ import Inventory from "./pages/Inventory";
 import Admin from "./pages/Admin";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import Unauthorized from "./pages/Unauthorized";
 import Insights from "./pages/Insights";
 import { pingHealth } from "@/services/api";
 
@@ -28,14 +29,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, user } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (user?.role !== "admin") return <Navigate to="/dashboard" replace />;
+  if (user?.role !== "admin") return <Navigate to="/unauthorized" state={{ from: window.location.pathname }} replace />;
   return <>{children}</>;
 };
 
 const RoleRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) => {
   const { isAuthenticated, user } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (!user || !allowedRoles.includes(user.role)) return <Navigate to="/dashboard" replace />;
+  if (!user || !allowedRoles.includes(user.role)) return <Navigate to="/unauthorized" state={{ from: window.location.pathname }} replace />;
   return <>{children}</>;
 };
 
@@ -55,6 +56,7 @@ const AppRoutes = () => {
       <Route path="/insights" element={<ProtectedRoute><Insights /></ProtectedRoute>} />
       <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+      <Route path="/unauthorized" element={<ProtectedRoute><Unauthorized /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

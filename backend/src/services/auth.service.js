@@ -17,7 +17,9 @@ export const registerUser = async (data) => {
     throw new Error("Password must be at least 6 characters");
   }
 
-  const existingUser = await User.findOne({ email: data.email });
+  const normalizedEmail = data.email.toLowerCase();
+
+  const existingUser = await User.findOne({ email: normalizedEmail });
 
   if (existingUser) {
     throw new Error("Email already registered");
@@ -27,7 +29,7 @@ export const registerUser = async (data) => {
 
   const user = await User.create({
     name: data.name,
-    email: data.email,
+    email: normalizedEmail,
     password: hashedPassword
   });
 
@@ -56,8 +58,8 @@ export const registerUser = async (data) => {
 };
 
 export const loginUser = async (data) => {
-
-  const user = await User.findOne({ email: data.email });
+  const normalizedEmail = data.email.toLowerCase();
+  const user = await User.findOne({ email: normalizedEmail });
 
   if (!user) {
     throw new Error("Invalid credentials");

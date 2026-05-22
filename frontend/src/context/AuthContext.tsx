@@ -30,7 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (token) {
       const decoded = parseJwt(token);
       if (decoded && decoded.exp * 1000 > Date.now()) {
-        return { id: decoded.userId, name: decoded.name, email: decoded.email, role: decoded.role };
+        return { id: decoded.userId, name: decoded.name, email: decoded.email, role: decoded.role || "retailer" };
       }
       localStorage.removeItem("token");
     }
@@ -38,11 +38,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const login = useCallback((userData: { id: string; name: string; email: string; role: UserRole }, token: string) => {
-    const decoded = parseJwt(token);
-    if (decoded && decoded.exp * 1000 > Date.now()) {
-      setUser({ id: decoded.userId, name: decoded.name, email: decoded.email, role: decoded.role });
-      localStorage.setItem("token", token);
-    }
+    setUser({ ...userData, role: userData.role || "retailer" });
+    localStorage.setItem("token", token);
   }, []);
 
   const logout = useCallback(() => {

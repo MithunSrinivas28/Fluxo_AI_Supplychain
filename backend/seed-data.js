@@ -120,9 +120,7 @@ async function seed() {
   // STEP 3: Clear old data
   // ──────────────────────────────────────────────
   console.log("🗑️  Clearing old data...");
-  await Product.deleteMany({});
-  await WeeklySales.deleteMany({});
-  await Inventory.deleteMany({});
+  await mongoose.connection.db.dropDatabase();
   console.log("   Collections cleared.\n");
 
   // ──────────────────────────────────────────────
@@ -203,17 +201,34 @@ async function seed() {
     },
   ]);
 
-  // Find or create admin user for the updatedBy field
-  let adminUser = await User.findOne({ role: "admin" });
-  if (!adminUser) {
-    const hashedPassword = await bcrypt.hash("admin123", 10);
-    adminUser = await User.create({
-      name: "Admin",
-      email: "admin@fluxo.ai",
-      password: hashedPassword,
-      role: "admin",
-    });
-    console.log("   Created admin user: admin@fluxo.ai / admin123");
+  // Seed Demo Users
+  const usersToSeed = [
+    { name: "Admin User", email: "admin@fluxo.ai", password: "Admin123", role: "admin" },
+    { name: "Retailer User", email: "retailer@fluxo.ai", password: "Retail123", role: "retailer" },
+    { name: "Warehouse Manager", email: "warehouse@fluxo.ai", password: "Warehouse123", role: "warehouse" }
+  ];
+
+  let adminUser;
+
+  for (const u of usersToSeed) {
+    let existing = await User.findOne({ email: u.email.toLowerCase() });
+    if (!existing) {
+      const hashed = await bcrypt.hash(u.password, 10);
+      existing = await User.create({
+        name: u.name,
+        email: u.email.toLowerCase(),
+        password: hashed,
+        role: u.role,
+      });
+      console.log(`   Created user: ${u.email} / ${u.password} (${u.role})`);
+    } else {
+      // Ensure password is correct if running over existing db
+      const hashed = await bcrypt.hash(u.password, 10);
+      existing.password = hashed;
+      existing.role = u.role;
+      await existing.save();
+    }
+    if (u.role === "admin") adminUser = existing;
   }
 
   const inventories = inventoryAgg.map((item) => {

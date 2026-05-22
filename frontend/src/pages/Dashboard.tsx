@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { StatusDot } from "@/components/StatusDot";
 import { Card, CardContent } from "@/components/ui/card";
@@ -84,47 +85,53 @@ const featureTooltips: Record<string, string> = {
 };
 
 const Dashboard = () => {
+  const { user } = useAuth();
+  const isRetailer = user?.role === "retailer";
+  const isWarehouse = user?.role === "warehouse";
+  
   const [range, setRange] = useState<TimeRange>("7D");
 
   // ─── Real API Data ───
   const periodMap: Record<TimeRange, string> = { "7D": "7d", "30D": "30d", "90D": "90d" };
 
-  const { data: inventoryData = [] } = useQuery({
+  const { data: inventoryData = [], isLoading: invLoading } = useQuery({
     queryKey: ["inventory"],
     queryFn: getInventory,
   });
   const safeInventory = Array.isArray(inventoryData) ? inventoryData : [];
 
-  const { data: decisionsData = [] } = useQuery({
+  const { data: decisionsData = [], isLoading: decisionsLoading } = useQuery({
     queryKey: ["decisions"],
     queryFn: getDecisions,
   });
   const safeRisk = Array.isArray(decisionsData) ? decisionsData : [];
 
-  const { data: demandTrends = [] } = useQuery({
+  const { data: demandTrends = [], isLoading: trendsLoading } = useQuery({
     queryKey: ["analytics-demand-trends", range],
     queryFn: () => getAnalyticsDemandTrends(periodMap[range]),
   });
 
-  const { data: seasonalData = [] } = useQuery({
+  const { data: seasonalData = [], isLoading: seasonalLoading } = useQuery({
     queryKey: ["analytics-seasonal"],
     queryFn: getAnalyticsSeasonal,
   });
 
-  const { data: featureImportance = [] } = useQuery({
+  const { data: featureImportance = [], isLoading: featuresLoading } = useQuery({
     queryKey: ["analytics-feature-importance"],
     queryFn: getAnalyticsFeatureImportance,
   });
 
-  const { data: warehouseUtil = [] } = useQuery({
+  const { data: warehouseUtil = [], isLoading: warehouseLoading } = useQuery({
     queryKey: ["analytics-warehouse-util"],
     queryFn: getAnalyticsWarehouseUtilization,
   });
 
-  const { data: zonePerformance = [] } = useQuery({
+  const { data: zonePerformance = [], isLoading: zoneLoading } = useQuery({
     queryKey: ["analytics-zone-performance"],
     queryFn: getAnalyticsZonePerformance,
   });
+
+  const isLoading = invLoading || decisionsLoading || trendsLoading || seasonalLoading || featuresLoading || warehouseLoading || zoneLoading;
 
   // ─── Derived Metrics (from real data) ───
   const safeTrends = Array.isArray(demandTrends) ? demandTrends : [];
@@ -225,6 +232,17 @@ const Dashboard = () => {
 
   const safeFeatures = Array.isArray(featureImportance) ? featureImportance : [];
 
+  if (isLoading) {
+    return (
+      <AppLayout title="Dashboard">
+        <div className="flex h-[60vh] flex-col items-center justify-center space-y-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground animate-pulse">Loading operational intelligence...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout title="Dashboard">
       <TooltipProvider delayDuration={200}>
@@ -301,6 +319,7 @@ const Dashboard = () => {
               </motion.div>
 
               {/* Demand Pressure Index */}
+              {!isRetailer && (
               <motion.div {...cardHover}>
                 <Card className="border-border/40 bg-card shadow-card overflow-hidden relative">
                   <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-amber" />
@@ -330,8 +349,10 @@ const Dashboard = () => {
                   </CardContent>
                 </Card>
               </motion.div>
+              )}
 
               {/* SKUs At Risk */}
+              {!isRetailer && (
               <motion.div {...cardHover}>
                 <Card className="border-border/40 bg-card shadow-card overflow-hidden relative">
                   <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${safeRisk.length > 0 ? "bg-destructive" : "bg-success"}`} />
@@ -363,8 +384,10 @@ const Dashboard = () => {
                   </CardContent>
                 </Card>
               </motion.div>
+              )}
 
               {/* Total Inventory */}
+              {!isRetailer && (
               <motion.div {...cardHover}>
                 <Card className="border-border/40 bg-card shadow-card overflow-hidden relative">
                   <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-teal" />
@@ -393,10 +416,12 @@ const Dashboard = () => {
                   </CardContent>
                 </Card>
               </motion.div>
+              )}
             </div>
           </motion.div>
 
           {/* ═══ FORECAST COMMAND PANEL ═══ */}
+          {!isWarehouse && (
           <motion.div {...section(0.1)}>
             <Card className="border-border/40 bg-card shadow-card">
               <CardContent className="p-0">
@@ -472,11 +497,13 @@ const Dashboard = () => {
               </CardContent>
             </Card>
           </motion.div>
+          )}
 
           {/* ═══ RISK & REORDER + TREND & SEASON ═══ */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
             {/* Risk & Reorder Intelligence */}
+            {!isRetailer && (
             <motion.div className="lg:col-span-5" {...section(0.15)}>
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" />
@@ -521,9 +548,10 @@ const Dashboard = () => {
                 </CardContent>
               </Card>
             </motion.div>
+            )}
 
             {/* Trend & Season Analysis */}
-            <motion.div className="lg:col-span-7" {...section(0.18)}>
+            <motion.div className={isRetailer ? "lg:col-span-12" : "lg:col-span-7"} {...section(0.18)}>
               <div className="flex items-center gap-2 mb-3">
                 <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
                 <h3 className="text-sm font-display font-semibold text-foreground">Trend & Season Analysis</h3>
@@ -599,6 +627,7 @@ const Dashboard = () => {
           </div>
 
           {/* ═══ WAREHOUSE COMMAND GRID ═══ */}
+          {!isRetailer && (
           <motion.div {...section(0.22)}>
             <div className="flex items-center gap-2 mb-3">
               <Warehouse className="h-3.5 w-3.5 text-muted-foreground" />
@@ -654,6 +683,7 @@ const Dashboard = () => {
               ))}
             </div>
           </motion.div>
+          )}
 
         </div>
       </TooltipProvider>

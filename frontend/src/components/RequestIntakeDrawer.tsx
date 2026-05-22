@@ -97,7 +97,7 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
   });
   const inventoryItems = Array.isArray(inventoryData) ? inventoryData : [];
 
-  const { data: productsData = [] } = useQuery({
+  const { data: productsData = [], isLoading: productsLoading, isError: productsError } = useQuery({
     queryKey: ["products"],
     queryFn: getProducts
   });
@@ -300,14 +300,18 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
                       <SelectValue placeholder="Select product" />
                     </SelectTrigger>
                     <SelectContent>
-                      {products.length > 0 ? products.map((p: any) => (
+                      {productsLoading ? (
+                        <div className="p-2 text-sm text-muted-foreground text-center">Loading products...</div>
+                      ) : productsError ? (
+                        <div className="p-2 text-sm text-destructive text-center">Failed to load products</div>
+                      ) : products.length > 0 ? products.map((p: any) => (
                         <SelectItem key={p.sku} value={p.sku}>
                           <span className="flex items-center gap-2">
                             {p.name}
                             <span className="text-[10px] text-muted-foreground font-mono">{p.sku}</span>
                           </span>
                         </SelectItem>
-                      )) : inventoryItems
+                      )) : inventoryItems.length > 0 ? inventoryItems
                         .filter((p: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.sku === p.sku) === i)
                         .map((p: any) => (
                         <SelectItem key={p.sku} value={p.sku}>
@@ -316,7 +320,9 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
                             <span className="text-[10px] text-muted-foreground font-mono">{p.sku}</span>
                           </span>
                         </SelectItem>
-                      ))}
+                      )) : (
+                        <div className="p-2 text-sm text-muted-foreground text-center">No products found</div>
+                      )}
                     </SelectContent>
                   </Select>
                 </motion.div>
