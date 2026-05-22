@@ -46,8 +46,9 @@ const Insights: React.FC = () => {
     try {
       console.log("SENDING MESSAGE:", trimmedText);
       const BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const API_URL = BASE.endsWith("/api") ? BASE : `${BASE}/api`;
       const token = localStorage.getItem("token");
-      const response = await fetch(`${BASE}/api/ai/chat`, {
+      const response = await fetch(`${API_URL}/ai/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
