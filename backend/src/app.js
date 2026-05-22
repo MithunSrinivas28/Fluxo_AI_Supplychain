@@ -44,17 +44,17 @@ const authLimiter = rateLimit({
 });
 
 // Routes
-app.use(healthRoutes);
-app.use(demandRoutes);
-app.use(decisionRoutes);
-app.use("/auth", authLimiter);
-app.use(authRoutes);
-app.use(requestRoutes);
-app.use(inventoryRoutes);
+app.use("/api", healthRoutes);
+app.use("/api", demandRoutes);
+app.use("/api", decisionRoutes);
+app.use("/api/auth", authLimiter);
+app.use("/api", authRoutes);
+app.use("/api", requestRoutes);
+app.use("/api", inventoryRoutes);
 app.use("/api/ai", aiRoutes);
-app.use(analyticsRoutes);
-app.use(productsRoutes);
-app.use(bulkRoutes);
+app.use("/api", analyticsRoutes);
+app.use("/api", productsRoutes);
+app.use("/api", bulkRoutes);
 
 // Error handler — LAST
 app.use(errorHandler);

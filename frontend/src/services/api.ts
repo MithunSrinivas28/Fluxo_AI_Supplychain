@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 async function handleResponse(res: Response) {
     const text = await res.text();
@@ -220,7 +220,7 @@ export async function pingHealth() {
 
 export async function parseNLP(message: string) {
     try {
-        const res = await customFetch(`${API_BASE}/api/ai/parse`, {
+        const res = await customFetch(`${API_BASE}/ai/parse`, {
             method: "POST",
             headers: getAuthHeaders(),
             body: JSON.stringify({ message })
