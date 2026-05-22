@@ -29,7 +29,7 @@ def predict(data: dict):
     current_price = data["current_price"]
     base_price = data["base_price"]
     discount_percent = data["discount_percent"]
-    year_growth = 1.05  # static for now
+    year_growth = data.get("year_growth", 1.05)
     month = data["month"]
     is_festival = data["is_festival"]
     product_id = data["product_id"]
@@ -37,7 +37,7 @@ def predict(data: dict):
     lag_2 = data["lag_2"]
 
     # --------- Zone One-Hot Encoding ---------
-    zone = data["zone"]
+    zone = data["zone"].lower()
 
     zone_South = 1 if zone == "south" else 0
     zone_West = 1 if zone == "west" else 0
@@ -52,7 +52,7 @@ def predict(data: dict):
     # A = baseline
 
     # --------- Category One-Hot Encoding ---------
-    category = data["category"]
+    category = data["category"].lower()
 
     category_dairy = 1 if category == "dairy" else 0
     category_poultry = 1 if category == "poultry" else 0

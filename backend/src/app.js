@@ -10,6 +10,9 @@ import authRoutes from "./routes/auth.routes.js";
 import requestRoutes from "./routes/request.routes.js";
 import inventoryRoutes from "./routes/inventory.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
+import analyticsRoutes from "./routes/analytics.routes.js";
+import productsRoutes from "./routes/products.routes.js";
+import bulkRoutes from "./routes/bulk.routes.js";
 
 const app = express();
 
@@ -49,6 +52,9 @@ app.use(authRoutes);
 app.use(requestRoutes);
 app.use(inventoryRoutes);
 app.use("/api/ai", aiRoutes);
+app.use(analyticsRoutes);
+app.use(productsRoutes);
+app.use(bulkRoutes);
 
 // Error handler — LAST
 app.use(errorHandler);

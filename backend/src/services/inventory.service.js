@@ -3,7 +3,7 @@ import { Inventory } from "../models/inventory.model.js";
 export const updateInventory = async (data, user) => {
 
   const inventory = await Inventory.findOneAndUpdate(
-    { warehouseZone: data.warehouseZone, product: data.product },
+    { zone: data.zone, warehouse: data.warehouse, product: data.product },
     {
       stockLevel: data.stockLevel,
       updatedBy: user._id

@@ -11,7 +11,6 @@ async function handleResponse(res: Response) {
 }
 
 const customFetch = async (url: string, options?: any) => {
-    console.log("API CALL:", url, { method: options?.method || 'GET', body: options?.body });
     const res = await fetch(url, options);
     if (res.status === 401) {
         localStorage.removeItem("token");
@@ -31,9 +30,10 @@ function getAuthHeaders(): HeadersInit {
     return headers;
 }
 
+// ─── Auth ───
+
 export async function loginUser(email: string, password: string) {
     try {
-        console.log("LOGIN REQUEST:", API_BASE);
         const res = await customFetch(`${API_BASE}/auth/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -41,8 +41,6 @@ export async function loginUser(email: string, password: string) {
         });
         const json = await handleResponse(res);
         if (!res.ok) throw new Error(json.message || json.error || "Login failed");
-
-        // Backend returns { success, message, data: { token, user } }
         const result = json.data || json;
         return result;
     } catch (error) {
@@ -56,7 +54,6 @@ export async function registerUser(name: string, email: string, password: string
         const res = await customFetch(`${API_BASE}/auth/register`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            // Removed role since front-end doesn't control role
             body: JSON.stringify({ name, email, password }),
         });
         const data = await handleResponse(res);
@@ -67,6 +64,22 @@ export async function registerUser(name: string, email: string, password: string
         throw error;
     }
 }
+
+// ─── Products ───
+
+export async function getProducts() {
+    try {
+        const res = await customFetch(`${API_BASE}/products`, { headers: getAuthHeaders() });
+        const json = await handleResponse(res);
+        if (!res.ok) throw new Error(json.message || json.error || "Products fetch failed");
+        return json.data || [];
+    } catch (error) {
+        console.error("API error:", error);
+        throw error;
+    }
+}
+
+// ─── Inventory ───
 
 export async function getInventory() {
     try {
@@ -79,13 +92,14 @@ export async function getInventory() {
             id: item._id || item.id || Math.random().toString(),
             product: item.product || "Unknown Product",
             sku: item.sku || "UNKN-001",
+            product_id: item.product_id,
             category: item.category || "General",
             stock: item.stockLevel ?? item.stock ?? 0,
             minStock: item.minStock ?? 50,
             status: item.status || "healthy",
             lastUpdated: item.updatedAt || new Date().toISOString(),
-            zone: item.warehouseZone || item.zone || "Zone A",
-            warehouse: item.warehouse || "Unknown",
+            zone: item.zone || "North",
+            warehouse: item.warehouse || "A",
             transactions: []
         })) : [];
     } catch (error) {
@@ -93,6 +107,24 @@ export async function getInventory() {
         throw error;
     }
 }
+
+export async function createInventory(payload: any) {
+    try {
+        const res = await customFetch(`${API_BASE}/inventory`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify(payload)
+        });
+        const data = await handleResponse(res);
+        if (!res.ok) throw new Error(data.message || data.error || "Inventory creation failed");
+        return data;
+    } catch (error) {
+        console.error("API error:", error);
+        throw error;
+    }
+}
+
+// ─── Demand ───
 
 export async function getDemand() {
     try {
@@ -105,6 +137,24 @@ export async function getDemand() {
         throw error;
     }
 }
+
+export async function createDemand(payload: any) {
+    try {
+        const res = await customFetch(`${API_BASE}/demand`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify(payload)
+        });
+        const data = await handleResponse(res);
+        if (!res.ok) throw new Error(data.message || data.error || "Demand creation failed");
+        return data;
+    } catch (error) {
+        console.error("API error:", error);
+        throw error;
+    }
+}
+
+// ─── Decisions ───
 
 export async function getDecisions() {
     try {
@@ -122,6 +172,8 @@ export async function getDecisions() {
         return [];
     }
 }
+
+// ─── Requests ───
 
 export async function getRequests() {
     try {
@@ -151,37 +203,7 @@ export async function createRequest(payload: any) {
     }
 }
 
-export async function createInventory(payload: any) {
-    try {
-        const res = await customFetch(`${API_BASE}/inventory`, {
-            method: "POST",
-            headers: getAuthHeaders(),
-            body: JSON.stringify(payload)
-        });
-        const data = await handleResponse(res);
-        if (!res.ok) throw new Error(data.message || data.error || "Inventory creation failed");
-        return data;
-    } catch (error) {
-        console.error("API error:", error);
-        throw error;
-    }
-}
-
-export async function createDemand(payload: any) {
-    try {
-        const res = await customFetch(`${API_BASE}/demand`, {
-            method: "POST",
-            headers: getAuthHeaders(),
-            body: JSON.stringify(payload)
-        });
-        const data = await handleResponse(res);
-        if (!res.ok) throw new Error(data.message || data.error || "Demand creation failed");
-        return data;
-    } catch (error) {
-        console.error("API error:", error);
-        throw error;
-    }
-}
+// ─── Health ───
 
 export async function pingHealth() {
     try {
@@ -194,6 +216,8 @@ export async function pingHealth() {
     }
 }
 
+// ─── AI / NLP ───
+
 export async function parseNLP(message: string) {
     try {
         const res = await customFetch(`${API_BASE}/api/ai/parse`, {
@@ -204,6 +228,168 @@ export async function parseNLP(message: string) {
         const data = await handleResponse(res);
         if (!res.ok) throw new Error(data.message || data.error || "NLP parse failed");
         return data; 
+    } catch (error) {
+        console.error("API error:", error);
+        throw error;
+    }
+}
+
+// ─── Analytics ───
+
+export async function getAnalyticsDemandTrends(period: string = "30d") {
+    try {
+        const res = await customFetch(`${API_BASE}/analytics/demand-trends?period=${period}`, {
+            headers: getAuthHeaders()
+        });
+        const json = await handleResponse(res);
+        if (!res.ok) return [];
+        return json.data || [];
+    } catch (error) {
+        console.error("Analytics demand trends error:", error);
+        return [];
+    }
+}
+
+export async function getAnalyticsSeasonal() {
+    try {
+        const res = await customFetch(`${API_BASE}/analytics/seasonal`, {
+            headers: getAuthHeaders()
+        });
+        const json = await handleResponse(res);
+        if (!res.ok) return [];
+        return json.data || [];
+    } catch (error) {
+        console.error("Analytics seasonal error:", error);
+        return [];
+    }
+}
+
+export async function getAnalyticsCategoryDemand() {
+    try {
+        const res = await customFetch(`${API_BASE}/analytics/category-demand`, {
+            headers: getAuthHeaders()
+        });
+        const json = await handleResponse(res);
+        if (!res.ok) return [];
+        return json.data || [];
+    } catch (error) {
+        console.error("Analytics category demand error:", error);
+        return [];
+    }
+}
+
+export async function getAnalyticsZonePerformance() {
+    try {
+        const res = await customFetch(`${API_BASE}/analytics/zone-performance`, {
+            headers: getAuthHeaders()
+        });
+        const json = await handleResponse(res);
+        if (!res.ok) return [];
+        return json.data || [];
+    } catch (error) {
+        console.error("Analytics zone performance error:", error);
+        return [];
+    }
+}
+
+export async function getAnalyticsWarehouseUtilization() {
+    try {
+        const res = await customFetch(`${API_BASE}/analytics/warehouse-utilization`, {
+            headers: getAuthHeaders()
+        });
+        const json = await handleResponse(res);
+        if (!res.ok) return [];
+        return json.data || [];
+    } catch (error) {
+        console.error("Analytics warehouse utilization error:", error);
+        return [];
+    }
+}
+
+export async function getAnalyticsTopProducts(limit: number = 10) {
+    try {
+        const res = await customFetch(`${API_BASE}/analytics/top-products?limit=${limit}`, {
+            headers: getAuthHeaders()
+        });
+        const json = await handleResponse(res);
+        if (!res.ok) return [];
+        return json.data || [];
+    } catch (error) {
+        console.error("Analytics top products error:", error);
+        return [];
+    }
+}
+
+export async function getAnalyticsFestivalImpact() {
+    try {
+        const res = await customFetch(`${API_BASE}/analytics/festival-impact`, {
+            headers: getAuthHeaders()
+        });
+        const json = await handleResponse(res);
+        if (!res.ok) return [];
+        return json.data || [];
+    } catch (error) {
+        console.error("Analytics festival impact error:", error);
+        return [];
+    }
+}
+
+export async function getAnalyticsForecastHistory() {
+    try {
+        const res = await customFetch(`${API_BASE}/analytics/forecast-history`, {
+            headers: getAuthHeaders()
+        });
+        const json = await handleResponse(res);
+        if (!res.ok) return [];
+        return json.data || [];
+    } catch (error) {
+        console.error("Analytics forecast history error:", error);
+        return [];
+    }
+}
+
+export async function getAnalyticsFeatureImportance() {
+    try {
+        const res = await customFetch(`${API_BASE}/analytics/feature-importance`, {
+            headers: getAuthHeaders()
+        });
+        const json = await handleResponse(res);
+        if (!res.ok) return [];
+        return json.data || [];
+    } catch (error) {
+        console.error("Analytics feature importance error:", error);
+        return [];
+    }
+}
+
+export async function postMLPreview(payload: any) {
+    try {
+        const res = await customFetch(`${API_BASE}/analytics/ml-preview`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify(payload)
+        });
+        const json = await handleResponse(res);
+        if (!res.ok) throw new Error(json.message || json.error || "ML preview failed");
+        return json.data || json;
+    } catch (error) {
+        console.error("ML Preview error:", error);
+        throw error;
+    }
+}
+
+// ─── Bulk Upload ───
+
+export async function bulkUploadRequests(rows: any[]) {
+    try {
+        const res = await customFetch(`${API_BASE}/bulk/requests`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ rows })
+        });
+        const data = await handleResponse(res);
+        if (!res.ok) throw new Error(data.message || data.error || "Bulk upload failed");
+        return data;
     } catch (error) {
         console.error("API error:", error);
         throw error;

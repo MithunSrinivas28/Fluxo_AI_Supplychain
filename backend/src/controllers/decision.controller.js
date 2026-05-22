@@ -2,29 +2,15 @@ import { calculateReorder } from "../services/decision/reorder.service.js";
 
 export const getReorderSuggestion = async (req, res, next) => {
   try {
-    const { region, category } = req.query;
+    const region = req.query.region || "global";
+    const category = req.query.category || "all";
 
-    if (!region || !category) {
-      return res.status(400).json({
-        success: false,
-        message: "region and category are required"
-      });
-    }
-
-    const decision = await calculateReorder(region, category);
-
-    if (!decision) {
-      return res.status(404).json({
-        success: false,
-        message: "No demand data found"
-      });
-    }
+    const suggestions = await calculateReorder(region, category);
 
     res.status(200).json({
       success: true,
-      data: decision
+      data: suggestions,
     });
-
   } catch (error) {
     next(error);
   }

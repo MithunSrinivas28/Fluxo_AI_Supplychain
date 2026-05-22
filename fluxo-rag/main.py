@@ -27,56 +27,112 @@ def extract_context(query: str) -> str:
     
     unique_products = df["product_name"].dropna().unique().tolist()
     unique_zones = df["zone"].dropna().unique().tolist()
+    unique_categories = df["category"].dropna().unique().tolist()
     
     matched_products = [p for p in unique_products if str(p).lower() in query_lower]
     matched_zones = [z for z in unique_zones if str(z).lower() in query_lower]
+    matched_categories = [c for c in unique_categories if str(c).lower() in query_lower]
     
     filtered = df.copy()
     
     if matched_products:
         filtered = filtered[filtered["product_name"].isin(matched_products)]
-    
     if matched_zones:
         filtered = filtered[filtered["zone"].isin(matched_zones)]
-        
+    if matched_categories:
+        filtered = filtered[filtered["category"].isin(matched_categories)]
     if "festival" in query_lower or "festive" in query_lower:
         filtered = filtered[filtered["is_festival"] == 1]
         
     if len(filtered) < 10:
         filtered = df.copy()
         
-    top_5_products = filtered.groupby("product_name")["units_sold_next_week"].mean().nlargest(5).to_dict()
+    # ─── Core Metrics ───
+    top_products = filtered.groupby("product_name")["units_sold_next_week"].mean().nlargest(10).to_dict()
+    bottom_products = filtered.groupby("product_name")["units_sold_next_week"].mean().nsmallest(5).to_dict()
     avg_demand_zone = filtered.groupby("zone")["units_sold_next_week"].mean().to_dict()
-    avg_demand_month = filtered.groupby("month")["units_sold_next_week"].mean().nlargest(5).to_dict()
+    avg_demand_month = filtered.groupby("month")["units_sold_next_week"].mean().to_dict()
     
+    # ─── Festival Impact ───
     festival_avg = df[df["is_festival"] == 1]["units_sold_next_week"].mean()
     non_festival_avg = df[df["is_festival"] == 0]["units_sold_next_week"].mean()
     
+    # ─── Year-over-Year ───
     yoy_demand = filtered.groupby("year")["units_sold_next_week"].mean().to_dict()
-
-    top_5_str = "\n".join([f"  {k}: {v:.0f} units/week" for k, v in top_5_products.items()])
-    zone_str = "\n".join([f"  {k}: {v:.0f} units/week" for k, v in avg_demand_zone.items()])
-    month_str = "\n".join([f"  Month {k:.0f}: {v:.0f} units/week" for k, v in avg_demand_month.items()])
-    yoy_str = "\n".join([f"  Year {k:.0f}: {v:.0f} units/week" for k, v in yoy_demand.items()])
     
-    summary = f"""Total records used for this context: {len(filtered)}
+    # ─── Warehouse Analysis ───
+    wh_demand = filtered.groupby(["zone", "warehouse"])["units_sold_next_week"].mean().to_dict()
+    
+    # ─── Category Breakdown ───
+    cat_demand = filtered.groupby("category")["units_sold_next_week"].agg(["mean", "sum", "count"]).to_dict("index")
+    
+    # ─── Product Trends (YoY) ───
+    product_yoy = filtered.groupby(["product_name", "year"])["units_sold_next_week"].mean().unstack(fill_value=0)
+    trending_up = []
+    trending_down = []
+    if len(product_yoy.columns) >= 2:
+        last_two = product_yoy.columns[-2:]
+        for prod in product_yoy.index:
+            prev = product_yoy.loc[prod, last_two[0]]
+            curr = product_yoy.loc[prod, last_two[1]]
+            if prev > 0:
+                change = ((curr - prev) / prev) * 100
+                if change > 5:
+                    trending_up.append(f"  {prod}: +{change:.1f}%")
+                elif change < -5:
+                    trending_down.append(f"  {prod}: {change:.1f}%")
+    
+    # ─── Discount Analysis ───
+    discount_impact = filtered.groupby("discount_percent")["units_sold_next_week"].mean().to_dict()
 
-Top 5 products by average units_sold_next_week:
-{top_5_str}
+    # ─── Build Summary ───
+    top_str = "\n".join([f"  {k}: {v:.0f} units/week" for k, v in top_products.items()])
+    bottom_str = "\n".join([f"  {k}: {v:.0f} units/week" for k, v in bottom_products.items()])
+    zone_str = "\n".join([f"  {k}: {v:.0f} units/week" for k, v in avg_demand_zone.items()])
+    month_str = "\n".join([f"  Month {int(k)}: {v:.0f} units/week" for k, v in sorted(avg_demand_month.items())])
+    yoy_str = "\n".join([f"  Year {int(k)}: {v:.0f} units/week" for k, v in yoy_demand.items()])
+    wh_str = "\n".join([f"  {z}-{w}: {v:.0f} units/week" for (z, w), v in wh_demand.items()])
+    cat_str = "\n".join([f"  {cat}: avg={d['mean']:.0f}, total={d['sum']:.0f}, records={d['count']}" for cat, d in cat_demand.items()])
+    disc_str = "\n".join([f"  {int(k)}% discount: {v:.0f} units/week avg" for k, v in sorted(discount_impact.items())])
+    
+    summary = f"""Dataset: {len(filtered)} records analyzed (from {len(df)} total)
+Products: {len(unique_products)} | Zones: {', '.join(unique_zones)} | Warehouses: A, B, C
 
-Average demand per zone:
+Top 10 products by avg weekly demand:
+{top_str}
+
+Bottom 5 products (underperforming):
+{bottom_str}
+
+Avg demand per zone:
 {zone_str}
 
-Average demand per month (top 5 months):
+Avg demand per month:
 {month_str}
 
-Festival weeks avg vs non-festival weeks avg:
-  Festival: {festival_avg:.0f} units/week
-  Non-Festival: {non_festival_avg:.0f} units/week
+Warehouse-level demand:
+{wh_str}
 
-Year over year avg demand:
+Category breakdown:
+{cat_str}
+
+Festival vs non-festival:
+  Festival weeks: {festival_avg:.0f} units/week
+  Non-festival weeks: {non_festival_avg:.0f} units/week
+  Uplift: {((festival_avg - non_festival_avg) / max(non_festival_avg, 1) * 100):.1f}%
+
+Year over year trend:
 {yoy_str}
+
+Discount impact on demand:
+{disc_str}
 """
+    
+    if trending_up:
+        summary += f"\nProducts trending UP (year-over-year):\n" + "\n".join(trending_up[:5])
+    if trending_down:
+        summary += f"\nProducts trending DOWN:\n" + "\n".join(trending_down[:5])
+    
     return summary
 
 @app.get("/data-check")
@@ -86,8 +142,9 @@ def data_check():
         "column_names": df.columns.tolist(),
         "unique_product_names": df["product_name"].unique().tolist() if "product_name" in df.columns else [],
         "unique_zones": df["zone"].unique().tolist() if "zone" in df.columns else [],
+        "unique_categories": df["category"].unique().tolist() if "category" in df.columns else [],
         "min_year": int(df["year"].min()) if "year" in df.columns else None,
-        "max_year": int(df["year"].max()) if "year" in df.columns else None
+        "max_year": int(df["year"].max()) if "year" in df.columns else None,
     }
 
 @app.get("/health")
@@ -104,16 +161,34 @@ def chat_endpoint(req: ChatRequest):
     context = extract_context(req.message)
     
     if req.backend_context:
-        backend_str = f"\nRealtime System Context (Live Data):\nInventory:\n{req.backend_context.get('inventories', [])}\n\nRecent Requests:\n{req.backend_context.get('recentRequests', [])}\n"
+        bc = req.backend_context
+        backend_str = "\n--- Live System Context ---\n"
+        if bc.get("inventorySummary"):
+            backend_str += f"Inventory Summary:\n{bc['inventorySummary']}\n"
+        if bc.get("lowStockAlerts"):
+            backend_str += f"Low Stock Alerts:\n{bc['lowStockAlerts']}\n"
+        if bc.get("recentRequests"):
+            backend_str += f"Recent Requests:\n{bc['recentRequests']}\n"
+        if bc.get("zoneSummary"):
+            backend_str += f"Zone Summary:\n{bc['zoneSummary']}\n"
         context += backend_str
     
     messages = [
-        {"role": "system", "content": "You are Fluxo's AI supply chain analyst. Answer questions using the data provided. Be specific, reference actual numbers, keep answers concise."}
+        {"role": "system", "content": (
+            "You are Fluxo's AI supply chain analyst. You have access to 3 years of historical "
+            "supply chain data covering 24 products across 4 zones (North, South, East, West) and "
+            "3 warehouses (A, B, C). Categories include agriculture, dairy, poultry, grains, "
+            "vegetables, fruits, electronics, raw_materials, and furniture. "
+            "Answer questions using specific numbers from the data provided. Be concise, "
+            "reference actual figures, and provide actionable insights. "
+            "When asked about risk, consider stock levels vs demand rates. "
+            "When asked about trends, reference year-over-year changes."
+        )}
     ]
     
     messages.extend(req.history[-6:])
     
-    user_prompt = f"Data:\n{context}\n\nQuestion: {req.message}"
+    user_prompt = f"Data Context:\n{context}\n\nQuestion: {req.message}"
     messages.append({"role": "user", "content": user_prompt})
     
     response = client.chat.completions.create(

@@ -46,10 +46,14 @@ export const createRequest = async (data, user) => {
 
   const month = new Date(order_date).getMonth() + 1;
 
+  // Get year_growth from latest sales record
+  const latestSale = sales[0];
+  const year_growth = latestSale?.year_growth || 1.05;
+
   const mlPayload = {
     product_id: product.product_id,
-    category: product.category,
-    zone,
+    category: product.category.toLowerCase(),
+    zone: zone.toLowerCase(),
     warehouse,
     base_price: product.base_price,
     current_price,
@@ -57,7 +61,8 @@ export const createRequest = async (data, user) => {
     month,
     is_festival,
     lag_1,
-    lag_2
+    lag_2,
+    year_growth
   };
   // STEP 4 — Call ML Service
 let forecast = 0;
@@ -118,7 +123,8 @@ try {
   // STEP 7 — Update Inventory
   const inventory = await Inventory.findOne({
     sku: product.sku,
-    warehouseZone: zone
+    zone,
+    warehouse
   });
 
   if (!inventory) {

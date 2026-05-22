@@ -9,12 +9,12 @@ const demandSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["electronics", "groceries", "raw_material", "furniture", "apparel"],
+      enum: ["agriculture", "dairy", "poultry", "grains", "vegetables", "fruits", "electronics", "raw_materials", "furniture"],
       required: true
     },
     region: {
       type: String,
-      enum: ["north", "south", "east", "west"],
+      enum: ["North", "South", "East", "West"],
       required: true
     },
     quantity: {

@@ -5,12 +5,48 @@ export const chatWithAI = async (req, res) => {
   try {
     const { message, history } = req.body;
 
-    const inventories = await Inventory.find().sort({ stockLevel: 1 }).limit(10).lean();
+    // Gather rich context for RAG
+    const allInventory = await Inventory.find().lean();
     const recentRequests = await DemandRequest.find().sort({ createdAt: -1 }).limit(10).lean();
-    
+
+    // Zone-level summary
+    const zoneSummary = {};
+    for (const inv of allInventory) {
+      const z = inv.zone || "Unknown";
+      if (!zoneSummary[z]) zoneSummary[z] = { totalStock: 0, items: 0 };
+      zoneSummary[z].totalStock += inv.stockLevel || 0;
+      zoneSummary[z].items += 1;
+    }
+    const zoneSummaryStr = Object.entries(zoneSummary)
+      .map(([z, d]) => `${z}: ${d.totalStock} units across ${d.items} items`)
+      .join("\n");
+
+    // Low stock alerts
+    const lowStock = allInventory
+      .filter(i => i.stockLevel < 100)
+      .sort((a, b) => a.stockLevel - b.stockLevel)
+      .slice(0, 15)
+      .map(i => `${i.product} (${i.zone}/${i.warehouse}): ${i.stockLevel} units`)
+      .join("\n");
+
+    // Category breakdown
+    const catMap = {};
+    for (const inv of allInventory) {
+      const c = inv.category || "unknown";
+      if (!catMap[c]) catMap[c] = { totalStock: 0, count: 0 };
+      catMap[c].totalStock += inv.stockLevel || 0;
+      catMap[c].count += 1;
+    }
+    const catStr = Object.entries(catMap)
+      .map(([c, d]) => `${c}: ${d.totalStock} units, ${d.count} items`)
+      .join("\n");
+
     const backend_context = {
-      lowStock: inventories,
-      recentRequests
+      inventorySummary: `Total items: ${allInventory.length}, Total stock: ${allInventory.reduce((s, i) => s + (i.stockLevel || 0), 0)}`,
+      zoneSummary: zoneSummaryStr,
+      lowStockAlerts: lowStock || "No critical low-stock items",
+      categoryBreakdown: catStr,
+      recentRequests: recentRequests.map(r => `${r.sku} - qty:${r.requested_quantity}, forecast:${r.forecast?.toFixed(0)}, risk:${r.risk_level}`).join("\n"),
     };
 
     const ragUrl = process.env.RAG_SERVICE_URL || "http://localhost:8000";

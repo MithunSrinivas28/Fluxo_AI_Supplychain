@@ -20,7 +20,7 @@ import {
   AlertTriangle, CheckCircle2, XCircle, ArrowRight, Sparkles,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getInventory, createRequest, parseNLP } from "@/services/api";
+import { getInventory, getProducts, createRequest, parseNLP, postMLPreview, bulkUploadRequests } from "@/services/api";
 
 /* ── Types ── */
 type InputMode = "structured" | "bulk" | "natural";
@@ -34,11 +34,15 @@ interface RequestPayload {
 }
 
 interface MLPreview {
-  predictedWeeklyDemand: number;
-  projectedStockAfter: number;
-  riskLevel: "critical" | "moderate" | "safe";
-  recommendedAction: string;
-  confidence: number;
+  forecast: number;
+  lower_bound: number;
+  upper_bound: number;
+  currentStock: number;
+  product_name: string;
+  category: string;
+  lag_1: number;
+  lag_2: number;
+  fallback?: boolean;
 }
 
 interface BulkRow {
@@ -55,13 +59,8 @@ interface BulkRow {
 }
 
 /* ── Constants ── */
-const zones = ["Zone A", "Zone B", "Zone C", "Zone D"];
-const warehousesByZone: Record<string, string[]> = {
-  "Zone A": ["WH-A1", "WH-A2", "WH-A3"],
-  "Zone B": ["WH-B1", "WH-B2"],
-  "Zone C": ["WH-C1", "WH-C2", "WH-C3"],
-  "Zone D": ["WH-D1", "WH-D2"],
-};
+const zones = ["North", "South", "East", "West"];
+const warehouses = ["A", "B", "C"];
 
 /* ── Animation config ── */
 const fieldAnim = (i: number) => ({
@@ -90,12 +89,19 @@ interface RequestIntakeDrawerProps {
 export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerProps) => {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<InputMode>("structured");
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const { data: inventoryData = [] } = useQuery({
     queryKey: ["inventory"],
     queryFn: getInventory
   });
   const inventoryItems = Array.isArray(inventoryData) ? inventoryData : [];
+
+  const { data: productsData = [] } = useQuery({
+    queryKey: ["products"],
+    queryFn: getProducts
+  });
+  const products = Array.isArray(productsData) ? productsData : [];
 
   // Structured form state
   const [product, setProduct] = useState("");
@@ -124,29 +130,29 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
   }, [product, inventoryItems]);
 
   const availableWarehouses = useMemo(() =>
-    zone ? warehousesByZone[zone] ?? [] : []
+    zone ? warehouses : []
     , [zone]);
 
-  const simulateMLPreview = useCallback(() => {
-    const inv = inventoryItems.find((i: any) => i.sku === product);
-    const stock = inv?.stock ?? 500;
-    const qty = parseInt(quantity) || 0;
-    const projected = Math.max(stock - qty, 0);
-    const demand = Math.round(qty * (0.85 + Math.random() * 0.3));
-    const risk: MLPreview["riskLevel"] =
-      projected < 100 ? "critical" : projected < 300 ? "moderate" : "safe";
-    const action = risk === "critical" ? "Reallocate Warehouse" :
-      risk === "moderate" ? "Partial Fulfill" : "Approve";
-
-    setMlPreview({
-      predictedWeeklyDemand: demand,
-      projectedStockAfter: projected,
-      riskLevel: risk,
-      recommendedAction: action,
-      confidence: Math.round(88 + Math.random() * 10),
-    });
-    setShowPreview(true);
-  }, [product, quantity, inventoryItems]);
+  const fetchMLPreview = useCallback(async () => {
+    if (!product || !zone || !warehouse) return;
+    setPreviewLoading(true);
+    try {
+      const result = await postMLPreview({
+        sku: product,
+        zone,
+        warehouse,
+        discount_percent: Number(discount) || 0,
+        is_festival: festival ? 1 : 0,
+        order_date: deliveryDate ? format(deliveryDate, "yyyy-MM-dd") : new Date().toISOString(),
+      });
+      setMlPreview(result);
+      setShowPreview(true);
+    } catch (err) {
+      console.error("ML Preview failed:", err);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [product, zone, warehouse, discount, festival, deliveryDate]);
 
   const handleBulkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -194,17 +200,15 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
   const handleSubmit = async () => {
     try {
       if (mode === "structured") {
-        const selectedProduct = inventoryItems.find((p: any) => p.sku === product);
         const payload = {
-          sku: selectedProduct?.sku || "",
-          zone: zone.toLowerCase().replace(" ", ""),
-          warehouse: warehouse,
+          sku: product,
+          zone,
+          warehouse,
           requested_quantity: Number(quantity) || 0,
           discount_percent: Number(discount) || 0,
           is_festival: festival ? 1 : 0,
           order_date: deliveryDate ? format(deliveryDate, "yyyy-MM-dd") : new Date().toISOString()
         };
-        console.log("REQUEST PAYLOAD:", payload);
         await createRequest(payload);
       } else if (mode === "bulk") {
         // Submit valid bulk rows
@@ -296,10 +300,19 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
                       <SelectValue placeholder="Select product" />
                     </SelectTrigger>
                     <SelectContent>
-                      {inventoryItems.map((p: any) => (
+                      {products.length > 0 ? products.map((p: any) => (
                         <SelectItem key={p.sku} value={p.sku}>
                           <span className="flex items-center gap-2">
                             {p.name}
+                            <span className="text-[10px] text-muted-foreground font-mono">{p.sku}</span>
+                          </span>
+                        </SelectItem>
+                      )) : inventoryItems
+                        .filter((p: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.sku === p.sku) === i)
+                        .map((p: any) => (
+                        <SelectItem key={p.sku} value={p.sku}>
+                          <span className="flex items-center gap-2">
+                            {p.product}
                             <span className="text-[10px] text-muted-foreground font-mono">{p.sku}</span>
                           </span>
                         </SelectItem>
@@ -411,15 +424,14 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
                   </div>
                 </motion.div>
 
-                {/* Preview ML Impact Button */}
                 <motion.div {...fieldAnim(7)}>
                   <Button
-                    onClick={simulateMLPreview}
-                    disabled={!isFormValid}
+                    onClick={fetchMLPreview}
+                    disabled={!product || !zone || !warehouse || previewLoading}
                     className="w-full h-10 bg-primary text-primary-foreground hover:bg-primary/90 gap-2 text-sm font-medium"
                   >
                     <Cpu className="h-3.5 w-3.5" />
-                    Preview ML Impact
+                    {previewLoading ? "Loading Prediction..." : "Preview ML Impact"}
                   </Button>
                 </motion.div>
 
@@ -441,31 +453,38 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
 
                         <div className="grid grid-cols-2 gap-3">
                           <div className="p-3 rounded-md bg-card/60 border border-border/20 space-y-1">
-                            <p className="text-[10px] text-muted-foreground tracking-wider uppercase">Predicted Weekly Demand</p>
-                            <p className="text-lg font-display font-bold text-foreground">{mlPreview.predictedWeeklyDemand.toLocaleString()}</p>
+                            <p className="text-[10px] text-muted-foreground tracking-wider uppercase">Forecast</p>
+                            <p className="text-lg font-display font-bold text-foreground">{mlPreview.forecast?.toLocaleString()}</p>
+                            <p className="text-[10px] text-muted-foreground">units/week</p>
                           </div>
                           <div className="p-3 rounded-md bg-card/60 border border-border/20 space-y-1">
-                            <p className="text-[10px] text-muted-foreground tracking-wider uppercase">Projected Stock After</p>
-                            <p className="text-lg font-display font-bold text-foreground">{mlPreview.projectedStockAfter.toLocaleString()}</p>
-                          </div>
-                          <div className={cn("p-3 rounded-md border space-y-1", riskBg[mlPreview.riskLevel])}>
-                            <p className="text-[10px] text-muted-foreground tracking-wider uppercase">Risk Level</p>
-                            <p className={cn("text-sm font-semibold capitalize", riskColor[mlPreview.riskLevel])}>
-                              {mlPreview.riskLevel === "critical" && <AlertTriangle className="inline h-3 w-3 mr-1" />}
-                              {mlPreview.riskLevel}
-                            </p>
+                            <p className="text-[10px] text-muted-foreground tracking-wider uppercase">Confidence Interval</p>
+                            <p className="text-lg font-display font-bold text-foreground">{mlPreview.lower_bound} – {mlPreview.upper_bound}</p>
+                            <p className="text-[10px] text-muted-foreground">lower – upper</p>
                           </div>
                           <div className="p-3 rounded-md bg-card/60 border border-border/20 space-y-1">
-                            <p className="text-[10px] text-muted-foreground tracking-wider uppercase">Confidence</p>
-                            <p className="text-lg font-display font-bold text-foreground">{mlPreview.confidence}%</p>
+                            <p className="text-[10px] text-muted-foreground tracking-wider uppercase">Current Stock</p>
+                            <p className="text-lg font-display font-bold text-foreground">{mlPreview.currentStock?.toLocaleString()}</p>
+                            <p className="text-[10px] text-muted-foreground">{mlPreview.product_name}</p>
+                          </div>
+                          <div className="p-3 rounded-md bg-card/60 border border-border/20 space-y-1">
+                            <p className="text-[10px] text-muted-foreground tracking-wider uppercase">Historical (lag)</p>
+                            <p className="text-lg font-display font-bold text-foreground">{mlPreview.lag_1}</p>
+                            <p className="text-[10px] text-muted-foreground">last week ({mlPreview.lag_2} prior)</p>
                           </div>
                         </div>
 
+                        {mlPreview.fallback && (
+                          <div className="p-2 rounded-md bg-amber/10 border border-amber/20 text-[10px] text-amber">
+                            ⚠ ML service unavailable — using historical average fallback
+                          </div>
+                        )}
+
                         <div className="p-3 rounded-md bg-card/60 border border-border/20">
-                          <p className="text-[10px] text-muted-foreground tracking-wider uppercase mb-1">Recommended Action</p>
-                          <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                          <p className="text-[10px] text-muted-foreground tracking-wider uppercase mb-1">Category</p>
+                          <p className="text-sm font-semibold text-foreground flex items-center gap-1.5 capitalize">
                             <ArrowRight className="h-3 w-3 text-primary" />
-                            {mlPreview.recommendedAction}
+                            {mlPreview.category}
                           </p>
                         </div>
 
@@ -575,7 +594,7 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
                   <Textarea
                     value={nlText}
                     onChange={e => { setNlText(e.target.value); setNlParsed(null); }}
-                    placeholder='e.g. "Need 1200 units of Organic Almonds for Zone A, delivery by March 8th, no festival period"'
+                    placeholder='e.g. "Need 1200 units of Rice for North zone, delivery by March 8th, no festival period"'
                     className="bg-muted/30 border-border/40 min-h-[100px] text-sm resize-none"
                   />
                 </motion.div>

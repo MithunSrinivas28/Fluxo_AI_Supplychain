@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { StatusDot } from "@/components/StatusDot";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,12 @@ import {
   BarChart, Bar, LineChart, Line,
 } from "recharts";
 import { useQuery } from "@tanstack/react-query";
-import { getInventory, getDemand, getDecisions } from "@/services/api";
+import {
+  getInventory, getDecisions,
+  getAnalyticsDemandTrends, getAnalyticsSeasonal,
+  getAnalyticsFeatureImportance, getAnalyticsWarehouseUtilization,
+  getAnalyticsZonePerformance,
+} from "@/services/api";
 import { motion } from "framer-motion";
 import {
   Activity, AlertTriangle, Warehouse, Shield,
@@ -70,146 +75,141 @@ const TensionBar = ({ value, max = 100 }: { value: number; max?: number }) => {
   );
 };
 
-/* ── Feature Importance Data ── */
-const featureImportance = [
-  { feature: "Discount Impact", pct: 28 },
-  { feature: "Seasonal Effect", pct: 24 },
-  { feature: "Warehouse Load", pct: 19 },
-  { feature: "Category Interaction", pct: 16 },
-  { feature: "Price Elasticity", pct: 13 },
-];
-
 const featureTooltips: Record<string, string> = {
   "Discount Impact": "Measures how promotional pricing affects demand volume across SKUs",
   "Seasonal Effect": "Captures recurring temporal patterns in demand cycles",
-  "Warehouse Load": "Correlation between warehouse utilization and fulfillment speed",
-  "Category Interaction": "Cross-category demand influence on inventory movement",
+  "Zone Effect": "Correlation between zone location and demand patterns",
+  "Festival Impact": "Demand uplift during festival/holiday periods",
   "Price Elasticity": "Sensitivity of demand to unit price changes",
 };
 
 const Dashboard = () => {
   const [range, setRange] = useState<TimeRange>("7D");
 
-  const { data: inventoryData = [], error: invError } = useQuery({
+  // ─── Real API Data ───
+  const periodMap: Record<TimeRange, string> = { "7D": "7d", "30D": "30d", "90D": "90d" };
+
+  const { data: inventoryData = [] } = useQuery({
     queryKey: ["inventory"],
-    queryFn: getInventory
+    queryFn: getInventory,
   });
-  if (invError) {
-    console.error("Dashboard API error:", invError);
-  }
-  const inventoryItems = inventoryData?.items || inventoryData?.data || inventoryData || [];
-  const safeInventory = Array.isArray(inventoryItems) ? inventoryItems : [];
+  const safeInventory = Array.isArray(inventoryData) ? inventoryData : [];
 
-  const { data: forecastQuery = [], error: demandError } = useQuery({
-    queryKey: ["demand"],
-    queryFn: getDemand
-  });
-  if (demandError) {
-    console.error("Dashboard API error:", demandError);
-  }
-  const forecastRaw = forecastQuery?.demand || forecastQuery?.data || forecastQuery || [];
-
-  const { data: decisionsData = [], error: decisionsError } = useQuery({
+  const { data: decisionsData = [] } = useQuery({
     queryKey: ["decisions"],
-    queryFn: getDecisions
+    queryFn: getDecisions,
   });
-  if (decisionsError) {
-    console.error("Dashboard API error:", decisionsError);
-  }
-  const reorderData = decisionsData?.decisions || decisionsData?.data || decisionsData || [];
+  const safeRisk = Array.isArray(decisionsData) ? decisionsData : [];
 
-  useEffect(() => {
-    console.log("DATA LOADED:", ["inventory"], inventoryData);
-    console.log("DATA LOADED:", ["demand"], forecastQuery);
-    console.log("DATA LOADED:", ["decisions"], decisionsData);
-  }, [inventoryData, forecastQuery, decisionsData]);
+  const { data: demandTrends = [] } = useQuery({
+    queryKey: ["analytics-demand-trends", range],
+    queryFn: () => getAnalyticsDemandTrends(periodMap[range]),
+  });
 
-  // Build chart data from API forecast, falling back to empty array
-  const data = useMemo(() => {
-    if (!forecastRaw || !Array.isArray(forecastRaw) || forecastRaw.length === 0) return [];
-    // Use all forecast data regardless of range selector for now
-    return forecastRaw.map((d: any, i: number) => ({
-      date: d.date || d.day || `Day ${i + 1}`,
-      orders: d.orders ?? d.predicted_demand ?? d.demand ?? 0,
-      revenue: d.revenue ?? 0,
-      inventory: d.inventory ?? 0,
-    }));
-  }, [forecastRaw]);
+  const { data: seasonalData = [] } = useQuery({
+    queryKey: ["analytics-seasonal"],
+    queryFn: getAnalyticsSeasonal,
+  });
 
-  // Use backend reorder decisions for risk items instead of frontend filtering
-  const riskItems = reorderData;
-  const safeRisk = Array.isArray(riskItems) ? riskItems : [];
+  const { data: featureImportance = [] } = useQuery({
+    queryKey: ["analytics-feature-importance"],
+    queryFn: getAnalyticsFeatureImportance,
+  });
 
-  // Derive forecast metrics from existing data
+  const { data: warehouseUtil = [] } = useQuery({
+    queryKey: ["analytics-warehouse-util"],
+    queryFn: getAnalyticsWarehouseUtilization,
+  });
+
+  const { data: zonePerformance = [] } = useQuery({
+    queryKey: ["analytics-zone-performance"],
+    queryFn: getAnalyticsZonePerformance,
+  });
+
+  // ─── Derived Metrics (from real data) ───
+  const safeTrends = Array.isArray(demandTrends) ? demandTrends : [];
+
   const totalForecastedDemand = useMemo(() =>
-    data.reduce((sum: number, d: any) => sum + (d.orders ?? 0), 0), [data]
+    safeTrends.reduce((sum: number, d: any) => sum + (d.orders ?? 0), 0), [safeTrends]
   );
-  const prevWeekDemand = useMemo(() =>
-    Math.round(totalForecastedDemand * 0.92), [totalForecastedDemand]
-  );
-  const demandChange = useMemo(() =>
-    +(((totalForecastedDemand - prevWeekDemand) / prevWeekDemand) * 100).toFixed(1),
-    [totalForecastedDemand, prevWeekDemand]
-  );
+
+  // Compute real change: compare latest half vs earlier half of the trend data
+  const demandChange = useMemo(() => {
+    if (safeTrends.length < 2) return 0;
+    const mid = Math.floor(safeTrends.length / 2);
+    const recent = safeTrends.slice(mid).reduce((s: number, d: any) => s + (d.orders ?? 0), 0);
+    const earlier = safeTrends.slice(0, mid).reduce((s: number, d: any) => s + (d.orders ?? 0), 0);
+    return earlier > 0 ? +((recent - earlier) / earlier * 100).toFixed(1) : 0;
+  }, [safeTrends]);
 
   const sparklineData = useMemo(() =>
-    [2680, 2810, 2720, 2950, 3020, totalForecastedDemand], [totalForecastedDemand]
+    safeTrends.slice(-6).map((d: any) => d.orders ?? 0),
+    [safeTrends]
   );
 
-  // Seasonal pattern data (yearly demand curve)
-  const seasonalCurve = useMemo(() => [
-    { month: "Jan", demand: 320 }, { month: "Feb", demand: 290 },
-    { month: "Mar", demand: 340 }, { month: "Apr", demand: 380 },
-    { month: "May", demand: 420 }, { month: "Jun", demand: 460 },
-    { month: "Jul", demand: 440 }, { month: "Aug", demand: 410 },
-    { month: "Sep", demand: 480 }, { month: "Oct", demand: 520 },
-    { month: "Nov", demand: 580 }, { month: "Dec", demand: 540 },
-  ], []);
+  // Seasonal curve from API
+  const seasonalCurve = useMemo(() => {
+    const safe = Array.isArray(seasonalData) ? seasonalData : [];
+    if (safe.length === 0) return [];
+    return safe.map((d: any) => ({
+      month: d.monthName || `M${d.month}`,
+      demand: d.demand ?? 0,
+    }));
+  }, [seasonalData]);
 
-  // Forecast chart with confidence band
-  const forecastData = useMemo(() =>
-    data.map((d, i) => {
-      const isForecast = i >= data.length - 2;
+  // Forecast chart data from demand trends
+  const forecastData = useMemo(() => {
+    if (safeTrends.length === 0) return [];
+    return safeTrends.map((d: any, i: number) => {
+      const isForecast = i >= safeTrends.length - 2;
       return {
         date: d.date,
         actual: isForecast ? undefined : d.orders,
         forecast: isForecast ? d.orders : undefined,
         upper: isForecast ? Math.round(d.orders * 1.12) : undefined,
         lower: isForecast ? Math.round(d.orders * 0.88) : undefined,
-        // Bridge point for continuous line
-        bridge: i === data.length - 3 ? d.orders : undefined,
+        bridge: i === safeTrends.length - 3 ? d.orders : undefined,
       };
-    }),
-    [data]
-  );
-  const safeForecast = Array.isArray(forecastData) ? forecastData : [];
+    });
+  }, [safeTrends]);
 
-  // Derive demand pressure from forecastData totals
-  const forecastTotal = useMemo(() =>
-    safeForecast.reduce((sum: number, d: any) => sum + (d.actual ?? d.forecast ?? 0), 0), [safeForecast]
-  );
-  const totalCapacity = useMemo(() =>
-    safeInventory.reduce((s: number, i: any) => s + (i.minStock || 0) * 3, 0), [safeInventory]
+  // Demand pressure from real data
+  const totalStock = useMemo(() =>
+    safeInventory.reduce((s: number, i: any) => s + (i.stock || 0), 0), [safeInventory]
   );
   const demandPressure = useMemo(() =>
-    totalCapacity > 0 ? Math.min(Math.round((forecastTotal / totalCapacity) * 100), 100) : 0,
-    [forecastTotal, totalCapacity]
+    totalStock > 0 ? Math.min(Math.round((totalForecastedDemand / totalStock) * 100), 100) : 0,
+    [totalForecastedDemand, totalStock]
   );
 
-  // Warehouse zone intelligence
-  const zones = ["Zone A", "Zone B", "Zone C", "Zone D"];
-  const warehouseData = useMemo(() =>
-    zones.map(zone => {
-      const items = safeInventory.filter((i: any) => i.zone === zone);
-      const totalStock = items.reduce((s: number, i: any) => s + (i.stock || 0), 0);
-      const capacity = items.reduce((s: number, i: any) => s + (i.minStock || 0) * 3, 0);
-      const utilization = capacity > 0 ? Math.round((totalStock / capacity) * 100) : 0;
-      const hasAlert = items.some((i: any) => i.status === "critical" || i.status === "low");
-      const sparkline = [65, 72, 68, 74, utilization, Math.min(utilization + 3, 100)];
-      return { zone, items: items.length, totalStock, capacity, utilization, hasAlert, sparkline };
-    }),
-    [safeInventory]
-  );
+  // Warehouse zone data from analytics API
+  const warehouseData = useMemo(() => {
+    const zones = Array.isArray(zonePerformance) ? zonePerformance : [];
+    return zones.map((z: any) => {
+      const zoneItems = safeInventory.filter((i: any) => i.zone === z.zone);
+      const zTotalStock = z.totalStock || zoneItems.reduce((s: number, i: any) => s + (i.stock || 0), 0);
+      const avgDemand = z.avgDemand || 1;
+      const weeksOfStock = avgDemand > 0 ? Math.round(zTotalStock / avgDemand * 10) / 10 : 0;
+      const hasAlert = safeRisk.some((r: any) => r.zone === z.zone);
+      const sparkline = safeTrends.slice(-6).map((d: any) => d.orders ?? 0);
+      return {
+        zone: z.zone,
+        items: z.productCount || zoneItems.length,
+        totalStock: zTotalStock,
+        avgDemand,
+        weeksOfStock,
+        hasAlert,
+        sparkline: sparkline.length > 1 ? sparkline : [0, 0, 0, 0, 0, 0],
+      };
+    });
+  }, [zonePerformance, safeInventory, safeRisk, safeTrends]);
+
+  // Last forecast timestamp (derived from latest trend data)
+  const lastForecastTime = useMemo(() => {
+    if (safeTrends.length === 0) return "No data";
+    const last = safeTrends[safeTrends.length - 1];
+    return last?.date || "Latest";
+  }, [safeTrends]);
 
   const riskLevel = safeRisk.length > 2 ? "Elevated" : safeRisk.length > 0 ? "Moderate" : "Low";
   const riskStatus = riskLevel === "Low" ? "online" : riskLevel === "Moderate" ? "warning" : "critical";
@@ -223,6 +223,8 @@ const Dashboard = () => {
     padding: "8px 12px",
   };
 
+  const safeFeatures = Array.isArray(featureImportance) ? featureImportance : [];
+
   return (
     <AppLayout title="Dashboard">
       <TooltipProvider delayDuration={200}>
@@ -235,8 +237,8 @@ const Dashboard = () => {
                 { icon: Activity, label: "System Health", value: "Operational", status: "online" as const },
                 { icon: Cpu, label: "Forecast Engine", value: "Active", status: "online" as const },
                 { icon: Shield, label: "Risk Level", value: riskLevel, status: riskStatus as "online" | "warning" | "critical" },
-                { icon: TrendingUp, label: "Seasonal Signal", value: "Active", status: "online" as const },
-                { icon: Clock, label: "Last Forecast", value: "2026-02-28 08:14 UTC", status: "online" as const },
+                { icon: TrendingUp, label: "Seasonal Signal", value: seasonalCurve.length > 0 ? "Active" : "Loading", status: "online" as const },
+                { icon: Clock, label: "Last Data Point", value: lastForecastTime, status: "online" as const },
               ].map((item, i) => (
                 <div
                   key={i}
@@ -273,7 +275,7 @@ const Dashboard = () => {
                   <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary" />
                   <CardContent className="p-5">
                     <p className="text-[10px] text-muted-foreground tracking-wider uppercase mb-3">
-                      Forecasted Demand · Next 7D
+                      Aggregated Demand · {range}
                     </p>
                     <div className="flex items-end justify-between gap-3">
                       <div>
@@ -289,10 +291,10 @@ const Dashboard = () => {
                           <span className={`text-xs font-medium ${demandChange >= 0 ? "text-success" : "text-destructive"}`}>
                             {demandChange > 0 ? "+" : ""}{demandChange}%
                           </span>
-                          <span className="text-[10px] text-muted-foreground">vs prev week</span>
+                          <span className="text-[10px] text-muted-foreground">vs prior period</span>
                         </div>
                       </div>
-                      <MiniSparkline data={sparklineData} />
+                      {sparklineData.length > 1 && <MiniSparkline data={sparklineData} />}
                     </div>
                   </CardContent>
                 </Card>
@@ -305,14 +307,14 @@ const Dashboard = () => {
                   <CardContent className="p-5">
                     <div className="flex items-start justify-between mb-3">
                       <p className="text-[10px] text-muted-foreground tracking-wider uppercase">
-                        Demand Pressure Index
+                        Demand vs Stock Ratio
                       </p>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Info className="h-3 w-3 text-muted-foreground cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent side="top" className="text-xs max-w-[200px]">
-                          Predicted demand ÷ available capacity. Higher values indicate supply strain.
+                          Aggregated demand ÷ total stock across all zones. Higher values indicate supply strain.
                         </TooltipContent>
                       </Tooltip>
                     </div>
@@ -335,25 +337,25 @@ const Dashboard = () => {
                   <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${safeRisk.length > 0 ? "bg-destructive" : "bg-success"}`} />
                   <CardContent className="p-5">
                     <p className="text-[10px] text-muted-foreground tracking-wider uppercase mb-3">
-                      SKUs At Risk · Next 7D
+                      SKUs At Risk
                     </p>
                     <p className="text-[28px] font-display font-bold text-foreground leading-none tracking-tight">
                       {safeRisk.length}
                     </p>
                     <div className="flex items-center gap-2 mt-3">
-                      {safeInventory.filter((i: any) => i.status === "critical").length > 0 && (
+                      {safeRisk.filter((i: any) => i.status === "critical").length > 0 && (
                         <div className="flex items-center gap-1">
                           <div className="h-2.5 w-5 rounded-sm bg-destructive/80" />
                           <span className="text-[10px] text-muted-foreground">
-                            {safeInventory.filter((i: any) => i.status === "critical").length} critical
+                            {safeRisk.filter((i: any) => i.status === "critical").length} critical
                           </span>
                         </div>
                       )}
-                      {safeInventory.filter((i: any) => i.status === "low").length > 0 && (
+                      {safeRisk.filter((i: any) => i.status === "low").length > 0 && (
                         <div className="flex items-center gap-1">
                           <div className="h-2.5 w-5 rounded-sm bg-amber/80" />
                           <span className="text-[10px] text-muted-foreground">
-                            {safeInventory.filter((i: any) => i.status === "low").length} low
+                            {safeRisk.filter((i: any) => i.status === "low").length} low
                           </span>
                         </div>
                       )}
@@ -362,31 +364,31 @@ const Dashboard = () => {
                 </Card>
               </motion.div>
 
-              {/* Forecast Confidence */}
+              {/* Total Inventory */}
               <motion.div {...cardHover}>
                 <Card className="border-border/40 bg-card shadow-card overflow-hidden relative">
                   <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-teal" />
                   <CardContent className="p-5">
                     <div className="flex items-start justify-between mb-3">
                       <p className="text-[10px] text-muted-foreground tracking-wider uppercase">
-                        Forecast Confidence
+                        Total Inventory
                       </p>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Info className="h-3 w-3 text-muted-foreground cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent side="top" className="text-xs max-w-[220px]">
-                          Time-split validation accuracy: model tested on rolling forward windows to prevent data leakage.
+                          Total stock units across all zones, warehouses, and products.
                         </TooltipContent>
                       </Tooltip>
                     </div>
                     <p className="text-[28px] font-display font-bold text-foreground leading-none tracking-tight">
-                      97.8%
+                      {totalStock.toLocaleString()}
                     </p>
-                    <p className="text-[10px] text-muted-foreground mt-2">Time-Split Validation</p>
+                    <p className="text-[10px] text-muted-foreground mt-2">Across {safeInventory.length} SKU-zone-warehouse entries</p>
                     <div className="flex items-center gap-1 mt-1">
                       <Gauge className="h-3 w-3 text-teal" />
-                      <span className="text-[10px] text-teal font-medium">High confidence</span>
+                      <span className="text-[10px] text-teal font-medium">{warehouseData.length} zones active</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -401,25 +403,21 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between px-6 pt-6 pb-3">
                   <div>
                     <h3 className="text-base font-display font-semibold text-foreground">
-                      Demand Forecast Command
+                      Demand Trend Analysis
                     </h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Historical demand · Forecast projection · Confidence band
+                      Historical demand aggregated weekly from {safeTrends.length} data points
                     </p>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="hidden sm:flex items-center gap-3 text-[10px] text-muted-foreground">
                       <span className="flex items-center gap-1.5">
                         <span className="h-0.5 w-4 bg-primary rounded-full" />
-                        Actual
+                        Historical
                       </span>
                       <span className="flex items-center gap-1.5">
                         <span className="h-0.5 w-4 bg-teal rounded-full" />
-                        Forecast
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-3 w-4 bg-teal/10 rounded-sm border border-teal/20" />
-                        Confidence
+                        Latest
                       </span>
                     </div>
                     <div className="flex gap-0.5 bg-muted/50 rounded-md p-0.5">
@@ -440,7 +438,7 @@ const Dashboard = () => {
 
                 <div className="px-6 pb-2">
                   <ResponsiveContainer width="100%" height={340}>
-                    <AreaChart data={safeForecast} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <AreaChart data={forecastData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                       <defs>
                         <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.08} />
@@ -455,25 +453,21 @@ const Dashboard = () => {
                       <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={44} />
                       <RechartsTooltip contentStyle={tooltipStyle} />
-                      {/* Confidence band */}
                       <Area type="monotone" dataKey="upper" stroke="none" fill="hsl(var(--teal))" fillOpacity={0.08} />
                       <Area type="monotone" dataKey="lower" stroke="none" fill="hsl(var(--card))" fillOpacity={1} />
-                      {/* Actual demand */}
                       <Area type="monotone" dataKey="actual" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#actualGrad)" dot={false} connectNulls={false} />
-                      {/* Forecast */}
                       <Area type="monotone" dataKey="forecast" stroke="hsl(var(--teal))" strokeWidth={2} strokeDasharray="6 3" fill="url(#forecastGrad)" dot={{ r: 3, fill: "hsl(var(--teal))", strokeWidth: 0 }} connectNulls={false} />
-                      {/* Bridge from actual to forecast */}
                       <Line type="monotone" dataKey="bridge" stroke="hsl(var(--primary))" strokeWidth={1.5} dot={false} connectNulls={false} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
 
                 <div className="flex items-center gap-4 px-6 pb-5 text-[10px] text-muted-foreground">
-                  <span>Last retrain: 2 days ago</span>
+                  <span>Data Source: WeeklySales collection</span>
                   <span className="w-px h-3 bg-border/60" />
-                  <span>Model: v3.2.1</span>
+                  <span>Model: XGBoost (3 quantile regressors)</span>
                   <span className="w-px h-3 bg-border/60" />
-                  <span>Confidence: 97.8%</span>
+                  <span>{safeTrends.length} weeks of data</span>
                 </div>
               </CardContent>
             </Card>
@@ -491,9 +485,9 @@ const Dashboard = () => {
               <Card className="border-border/40 bg-card shadow-card h-[calc(100%-32px)]">
                 <CardContent className="p-4 space-y-3">
                   {safeRisk.length > 0 ? (
-                    safeRisk.map((item, i) => (
+                    safeRisk.slice(0, 8).map((item: any, i: number) => (
                       <motion.div
-                        key={item.id}
+                        key={item.id || i}
                         initial={{ opacity: 0, x: -8 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.3, delay: 0.2 + i * 0.05 }}
@@ -513,10 +507,10 @@ const Dashboard = () => {
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-muted-foreground mt-1.5">
                             <span>Zone: {item.zone}</span>
                             <span>SKU: {item.sku}</span>
-                            <span>Stock: {item.stock.toLocaleString()}</span>
-                            <span>Predicted demand: {(item.minStock * 2).toLocaleString()}</span>
-                            <span>Shortage ETA: {item.status === "critical" ? "~2 days" : "~5 days"}</span>
-                            <span>Risk: {item.status === "critical" ? "High" : "Medium"}</span>
+                            <span>Stock: {item.stock?.toLocaleString()}</span>
+                            <span>Avg Weekly: {item.avgWeeklyDemand?.toLocaleString()}</span>
+                            <span>Weeks Left: {item.weeksOfStock}</span>
+                            <span>Reorder: {item.suggestedReorder?.toLocaleString()}</span>
                           </div>
                         </div>
                       </motion.div>
@@ -549,18 +543,10 @@ const Dashboard = () => {
                         <YAxis tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={32} />
                         <RechartsTooltip contentStyle={tooltipStyle} />
                         <Line type="monotone" dataKey="demand" stroke="hsl(var(--primary))" strokeWidth={1.5} dot={false} />
-                        {/* Seasonal phase markers */}
-                        {[2, 5, 8, 11].map(idx => (
-                          <Line key={idx} type="monotone" dataKey={() => undefined} />
-                        ))}
                       </LineChart>
                     </ResponsiveContainer>
                     <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <span className="h-px w-3 border-t border-dashed border-muted-foreground/40" />
-                        Q1/Q3 transition
-                      </span>
-                      <span className="text-teal font-medium">Festival Surge Active</span>
+                      <span>Avg demand by month across all zones/products</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -570,19 +556,19 @@ const Dashboard = () => {
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
                       <p className="text-[10px] text-muted-foreground tracking-wider uppercase">
-                        Feature Importance · RF Model
+                        Feature Importance · XGBoost
                       </p>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Info className="h-3 w-3 text-muted-foreground cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent side="top" className="text-xs max-w-[220px]">
-                          Random Forest feature ranking showing which variables most influence demand predictions.
+                          Computed from actual data variance: discount effect on demand, seasonal variance, zone differences, festival uplift, and price sensitivity.
                         </TooltipContent>
                       </Tooltip>
                     </div>
                     <div className="space-y-3">
-                      {featureImportance.map((f) => (
+                      {safeFeatures.map((f: any) => (
                         <Tooltip key={f.feature}>
                           <TooltipTrigger asChild>
                             <div className="cursor-help">
@@ -601,7 +587,7 @@ const Dashboard = () => {
                             </div>
                           </TooltipTrigger>
                           <TooltipContent side="left" className="text-xs max-w-[200px]">
-                            {featureTooltips[f.feature]}
+                            {featureTooltips[f.feature] || `${f.feature}: ${f.pct}% contribution to demand prediction`}
                           </TooltipContent>
                         </Tooltip>
                       ))}
@@ -616,10 +602,10 @@ const Dashboard = () => {
           <motion.div {...section(0.22)}>
             <div className="flex items-center gap-2 mb-3">
               <Warehouse className="h-3.5 w-3.5 text-muted-foreground" />
-              <h3 className="text-sm font-display font-semibold text-foreground">Warehouse Command Grid</h3>
+              <h3 className="text-sm font-display font-semibold text-foreground">Zone Intelligence Grid</h3>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {warehouseData.map((z, i) => (
+              {warehouseData.map((z: any, i: number) => (
                 <motion.div
                   key={z.zone}
                   {...cardHover}
@@ -643,20 +629,20 @@ const Dashboard = () => {
 
                       <div className="grid grid-cols-2 gap-x-3 gap-y-2 mb-3">
                         <div>
-                          <p className="text-[10px] text-muted-foreground">Forecasted</p>
+                          <p className="text-[10px] text-muted-foreground">Total Stock</p>
                           <p className="text-sm font-display font-bold text-foreground">{z.totalStock.toLocaleString()}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] text-muted-foreground">Capacity</p>
-                          <p className="text-sm font-display font-bold text-foreground">{z.capacity.toLocaleString()}</p>
+                          <p className="text-[10px] text-muted-foreground">Avg Demand/wk</p>
+                          <p className="text-sm font-display font-bold text-foreground">{z.avgDemand.toLocaleString()}</p>
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[10px] text-muted-foreground">Utilization</span>
-                        <span className="text-[10px] font-medium text-foreground">{z.utilization}%</span>
+                        <span className="text-[10px] text-muted-foreground">Weeks of Stock</span>
+                        <span className="text-[10px] font-medium text-foreground">{z.weeksOfStock}</span>
                       </div>
-                      <TensionBar value={z.utilization} />
+                      <TensionBar value={Math.min(z.weeksOfStock * 20, 100)} />
 
                       <div className="flex items-center justify-between mt-3">
                         <MiniSparkline data={z.sparkline} color={z.hasAlert ? "hsl(var(--amber))" : "hsl(var(--primary))"} />

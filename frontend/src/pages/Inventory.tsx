@@ -49,17 +49,12 @@ const section = (delay: number) => ({
   transition: { duration: 0.4, delay, ease: [0.25, 0.1, 0.25, 1] as const },
 });
 
-const warehousesByZone: Record<string, string[]> = {
-  "Zone A": ["Warehouse A1", "Warehouse A2"],
-  "Zone B": ["Warehouse B1"],
-  "Zone C": ["Warehouse C1", "Warehouse C2"],
-  "Zone D": ["Warehouse D1"],
-};
+const ZONES = ["North", "South", "East", "West"];
+const WAREHOUSES = ["A", "B", "C"];
 
 /* ──────────── component ──────────── */
 const Inventory = () => {
   const queryClient = useQueryClient();
-  const zones = Object.keys(warehousesByZone);
   const [selectedZone, setSelectedZone] = useState<string>("all");
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
 
@@ -69,17 +64,13 @@ const Inventory = () => {
   });
   const safeInventory = Array.isArray(data) ? data : [];
 
-  useEffect(() => {
-    console.log("DATA LOADED:", ["inventory"], data);
-  }, [data]);
-
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [adjustModal, setAdjustModal] = useState<{ open: boolean; item: InventoryItem | null; mode: "add" | "remove" | "threshold" | "delete" }>({ open: false, item: null, mode: "add" });
   const [adjustQty, setAdjustQty] = useState("");
   const [highlightedRows, setHighlightedRows] = useState<Set<string>>(new Set());
 
-  const warehouses = selectedZone === "all" ? Object.values(warehousesByZone).flat() : (warehousesByZone[selectedZone] ?? []);
+  const warehouses = WAREHOUSES;
 
   const filtered = useMemo(() => {
     let list = safeInventory;
@@ -172,7 +163,7 @@ const Inventory = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Zones</SelectItem>
-                {zones.map(z => <SelectItem key={z} value={z}>{z}</SelectItem>)}
+                {ZONES.map(z => <SelectItem key={z} value={z}>{z}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
