@@ -513,12 +513,4 @@ A `render.yaml` blueprint is included for one-click Render deployment.
 
 ## Author
 
-**Mithun S** — Software Engineer
-
-Built as a full-stack engineering project demonstrating system design, ML integration, and production deployment. Designed to showcase real-world supply chain problem-solving with modern web technologies and machine learning.
-
----
-
-<p align="center">
-  <sub>Built with precision. Deployed with confidence.</sub>
-</p>
+**Mithun S** 
