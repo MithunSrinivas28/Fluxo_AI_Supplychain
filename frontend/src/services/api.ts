@@ -1,4 +1,14 @@
-export const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+let rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+// Handle Vercel misconfigurations where the value literally contains the key or quotes
+if (rawApiUrl.startsWith("VITE_API_URL=")) {
+  rawApiUrl = rawApiUrl.replace("VITE_API_URL=", "");
+}
+rawApiUrl = rawApiUrl.replace(/^["']|["']$/g, ""); // Strip surrounding quotes
+rawApiUrl = rawApiUrl.replace(/\/api\/?$/, ""); // Strip any /api suffix just in case
+rawApiUrl = rawApiUrl.replace(/\/+$/, ""); // Strip trailing slash
+
+export const API_URL = rawApiUrl;
 
 async function handleResponse(res: Response) {
     const text = await res.text();
