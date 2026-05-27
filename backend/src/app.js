@@ -13,6 +13,7 @@ import aiRoutes from "./routes/ai.routes.js";
 import analyticsRoutes from "./routes/analytics.routes.js";
 import productsRoutes from "./routes/products.routes.js";
 import bulkRoutes from "./routes/bulk.routes.js";
+import { runSeed } from "./controllers/seed.controller.js";
 
 const app = express();
 
@@ -58,6 +59,9 @@ app.use("/api", bulkRoutes);
 
 // Root health check for Render
 app.get("/health", (req, res) => res.json({ status: "ok" }));
+
+// Seed endpoint (for initial production setup)
+app.post("/api/seed", runSeed);
 
 // Error handler — LAST
 app.use(errorHandler);
