@@ -59,7 +59,7 @@ export interface InventoryItem {
   minStock: number;
   status: "healthy" | "low" | "critical" | "new";
   lastUpdated: string;
-  addedDate: string;
+  addedDate?: string;
   transactions: InventoryTransaction[];
 }
 

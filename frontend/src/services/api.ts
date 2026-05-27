@@ -50,12 +50,12 @@ export async function loginUser(email: string, password: string) {
     }
 }
 
-export async function registerUser(name: string, email: string, password: string) {
+export async function registerUser(name: string, email: string, password: string, role: string = "retailer") {
     try {
         const res = await customFetch(`${API_URL}/auth/register`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, email, password }),
+            body: JSON.stringify({ name, email, password, role }),
         });
         const data = await handleResponse(res);
         if (!res.ok) throw new Error(data.message || data.error || "Registration failed");

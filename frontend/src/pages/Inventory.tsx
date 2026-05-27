@@ -28,9 +28,11 @@ const ago = (iso: string) => {
   if (h < 24) return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
 };
-const computeStatus = (stock: number, min: number, addedDate: string): InventoryItem["status"] => {
-  const daysSinceAdded = (Date.now() - new Date(addedDate).getTime()) / 86400000;
-  if (daysSinceAdded <= 7) return "new";
+const computeStatus = (stock: number, min: number, addedDate?: string): InventoryItem["status"] => {
+  if (addedDate) {
+    const daysSinceAdded = (Date.now() - new Date(addedDate).getTime()) / 86400000;
+    if (daysSinceAdded <= 7) return "new";
+  }
   if (stock <= min * 0.5) return "critical";
   if (stock <= min) return "low";
   return "healthy";
@@ -118,12 +120,13 @@ const Inventory = () => {
       }
 
       await createInventory({
-        productId: id,
-        type: txType,
-        source: txSource,
-        quantity: txQty,
-        newStock,
-        newMin
+        zone: adjustModal.item.zone,
+        warehouse: adjustModal.item.warehouse,
+        product: adjustModal.item.product,
+        sku: adjustModal.item.sku,
+        product_id: (adjustModal.item as any).product_id,
+        category: adjustModal.item.category,
+        stockLevel: newStock
       });
 
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
@@ -139,8 +142,20 @@ const Inventory = () => {
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!adjustModal.item) return;
+    try {
+      await createInventory({
+        zone: adjustModal.item.zone,
+        warehouse: adjustModal.item.warehouse,
+        product: adjustModal.item.product,
+        sku: adjustModal.item.sku,
+        stockLevel: 0
+      });
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+    } catch (err) {
+      console.error("Failed to remove item", err);
+    }
     setAdjustModal({ open: false, item: null, mode: "add" });
   };
 

@@ -203,7 +203,7 @@ export const RequestIntakeDrawer = ({ open, onOpenChange }: RequestIntakeDrawerP
         const payload = {
           sku: product,
           zone,
-          warehouse,
+          warehouse: warehouse || "A",
           requested_quantity: Number(quantity) || 0,
           discount_percent: Number(discount) || 0,
           is_festival: festival ? 1 : 0,

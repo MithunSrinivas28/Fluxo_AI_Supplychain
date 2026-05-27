@@ -21,6 +21,7 @@ import { User } from "./src/models/user.model.js";
 import { Product } from "./src/models/product.model.js";
 import { Inventory } from "./src/models/inventory.model.js";
 import { WeeklySales } from "./src/models/weeklySales.model.js";
+import { DemandRequest } from "./src/models/demandRequest.model.js";
 
 dotenv.config();
 
@@ -253,22 +254,71 @@ async function seed() {
   console.log(`✅ Seeded ${inventories.length} inventory records.`);
 
   // ──────────────────────────────────────────────
+  // STEP 6.5: Seed Demo DemandRequests
+  // ──────────────────────────────────────────────
+  console.log("📋 Seeding demo DemandRequests...");
+  const demoProducts = products.slice(0, 10);
+  const zonesList = ["North", "South", "East", "West"];
+  const warehousesList = ["A", "B", "C"];
+  const statusList = ["FULFILLED", "PARTIAL", "PENDING"];
+
+  const retailerUser = await User.findOne({ email: "retailer@fluxo.ai" });
+  const demoRequests = [];
+
+  for (let i = 0; i < 20; i++) {
+    const prod = demoProducts[i % demoProducts.length];
+    const zone = zonesList[i % zonesList.length];
+    const wh = warehousesList[i % warehousesList.length];
+    const qty = Math.floor(Math.random() * 200) + 50;
+    const forecast = qty * (0.8 + Math.random() * 0.4);
+    const lower = forecast * 0.85;
+    const upper = forecast * 1.15;
+    let risk = "Balanced";
+    if (qty > upper) risk = "High Overstock Risk";
+    else if (qty < lower) risk = "Understock Risk";
+
+    demoRequests.push({
+      product_id: prod.product_id,
+      sku: prod.sku,
+      category: prod.category,
+      zone,
+      warehouse: wh,
+      requested_quantity: qty,
+      discount_percent: Math.floor(Math.random() * 15),
+      is_festival: Math.random() > 0.8 ? 1 : 0,
+      order_date: new Date(2024, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1),
+      forecast: Math.round(forecast),
+      lower_bound: Math.round(lower),
+      upper_bound: Math.round(upper),
+      risk_level: risk,
+      status: statusList[i % statusList.length],
+      fulfilledQuantity: Math.floor(qty * 0.8),
+      createdBy: retailerUser?._id || adminUser._id
+    });
+  }
+
+  await DemandRequest.insertMany(demoRequests);
+  console.log(`✅ Seeded ${demoRequests.length} demo DemandRequests.`);
+
+  // ──────────────────────────────────────────────
   // STEP 7: Verify
   // ──────────────────────────────────────────────
   const counts = {
     products: await Product.countDocuments(),
     weeklySales: await WeeklySales.countDocuments(),
     inventory: await Inventory.countDocuments(),
+    demandRequests: await DemandRequest.countDocuments(),
     users: await User.countDocuments(),
   };
 
   console.log("\n═══════════════════════════════════════");
   console.log("  SEED COMPLETE — Collection Summary");
   console.log("═══════════════════════════════════════");
-  console.log(`  Products:     ${counts.products}`);
-  console.log(`  WeeklySales:  ${counts.weeklySales}`);
-  console.log(`  Inventory:    ${counts.inventory}`);
-  console.log(`  Users:        ${counts.users}`);
+  console.log(`  Products:        ${counts.products}`);
+  console.log(`  WeeklySales:     ${counts.weeklySales}`);
+  console.log(`  Inventory:       ${counts.inventory}`);
+  console.log(`  DemandRequests:  ${counts.demandRequests}`);
+  console.log(`  Users:           ${counts.users}`);
   console.log("═══════════════════════════════════════\n");
 
   // Quick data integrity check

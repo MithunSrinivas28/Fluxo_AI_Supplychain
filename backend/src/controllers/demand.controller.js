@@ -1,7 +1,6 @@
 import { createDemand, getDemands, getZoneSummary  } from "../services/demand.service.js";
 
 export const addDemand = async (req, res, next) => {
-    console.log("BODY:", req.body);
   try {
     const demand = await createDemand(req.body);
     res.status(201).json({

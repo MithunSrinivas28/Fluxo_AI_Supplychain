@@ -27,10 +27,14 @@ export const registerUser = async (data) => {
 
   const hashedPassword = await bcrypt.hash(data.password, 10);
 
+  const validRoles = ["admin", "retailer", "warehouse"];
+  const role = validRoles.includes(data.role) ? data.role : "retailer";
+
   const user = await User.create({
     name: data.name,
     email: normalizedEmail,
-    password: hashedPassword
+    password: hashedPassword,
+    role
   });
 
   const token = jwt.sign(

@@ -56,6 +56,9 @@ app.use("/api", analyticsRoutes);
 app.use("/api", productsRoutes);
 app.use("/api", bulkRoutes);
 
+// Root health check for Render
+app.get("/health", (req, res) => res.json({ status: "ok" }));
+
 // Error handler — LAST
 app.use(errorHandler);
 

@@ -20,7 +20,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-df = pd.read_csv("data/synthetic_supplychain_data.csv")
+try:
+    df = pd.read_csv("data/synthetic_supplychain_data.csv")
+    print(f"✅ Loaded {len(df)} rows from supply chain dataset")
+except Exception as e:
+    print(f"❌ Failed to load dataset: {e}")
+    df = pd.DataFrame()
 
 def extract_context(query: str) -> str:
     query_lower = query.lower()
@@ -191,14 +196,17 @@ def chat_endpoint(req: ChatRequest):
     user_prompt = f"Data Context:\n{context}\n\nQuestion: {req.message}"
     messages.append({"role": "user", "content": user_prompt})
     
-    response = client.chat.completions.create(
-        model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-        messages=messages,
-        max_tokens=1024,
-        temperature=0.3
-    )
-    
-    return {"response": response.choices[0].message.content}
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            messages=messages,
+            max_tokens=1024,
+            temperature=0.3
+        )
+        return {"response": response.choices[0].message.content}
+    except Exception as e:
+        print(f"Groq API error: {e}")
+        return {"response": "I'm having trouble connecting to the AI service right now. Please try again in a moment."}
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))

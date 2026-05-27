@@ -8,7 +8,7 @@ const router = express.Router();
 router.post(
   "/requests",
   protect,
-  authorize("retailer"),
+  authorize("retailer", "admin"),
   submitRequest
 );
 

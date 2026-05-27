@@ -96,9 +96,7 @@ try {
 
   if (requested_quantity > upper_bound) {
     risk_level = "High Overstock Risk";
-  }
-
-  if (requested_quantity < lower_bound) {
+  } else if (requested_quantity < lower_bound) {
     risk_level = "Understock Risk";
   }
 
@@ -128,7 +126,11 @@ try {
   });
 
   if (!inventory) {
-    throw new Error("INVENTORY_ZONE_NOT_FOUND");
+    // No inventory record exists — request saved but unfulfilled
+    savedRequest.status = "PENDING";
+    savedRequest.fulfilledQuantity = 0;
+    await savedRequest.save();
+    return savedRequest;
   }
 
   const fulfilled = Math.min(inventory.stockLevel, requested_quantity);
