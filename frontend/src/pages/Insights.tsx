@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { AppLayout } from "@/components/AppLayout";
+import { API_URL } from "@/services/api";
 
 interface Message {
   role: 'user' | 'assistant';
@@ -45,8 +46,6 @@ const Insights: React.FC = () => {
     setLoading(true);
 
     try {
-      const BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
-      const API_URL = BASE.endsWith("/api") ? BASE : `${BASE}/api`;
       const token = localStorage.getItem("token");
       const response = await fetch(`${API_URL}/ai/chat`, {
         method: 'POST',
