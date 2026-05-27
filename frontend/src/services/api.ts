@@ -1,5 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
-const API_URL = API_BASE.endsWith("/api") ? API_BASE : `${API_BASE}/api`;
+export const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 async function handleResponse(res: Response) {
     const text = await res.text();
@@ -35,7 +34,7 @@ function getAuthHeaders(): HeadersInit {
 
 export async function loginUser(email: string, password: string) {
     try {
-        const res = await customFetch(`${API_URL}/auth/login`, {
+        const res = await customFetch(`${API_URL}/api/auth/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password }),
@@ -52,7 +51,7 @@ export async function loginUser(email: string, password: string) {
 
 export async function registerUser(name: string, email: string, password: string, role: string = "retailer") {
     try {
-        const res = await customFetch(`${API_URL}/auth/register`, {
+        const res = await customFetch(`${API_URL}/api/auth/register`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name, email, password, role }),
@@ -70,7 +69,7 @@ export async function registerUser(name: string, email: string, password: string
 
 export async function getProducts() {
     try {
-        const res = await customFetch(`${API_URL}/products`, { headers: getAuthHeaders() });
+        const res = await customFetch(`${API_URL}/api/products`, { headers: getAuthHeaders() });
         const json = await handleResponse(res);
         if (!res.ok) throw new Error(json.message || json.error || "Products fetch failed");
         return json.data || [];
@@ -84,7 +83,7 @@ export async function getProducts() {
 
 export async function getInventory() {
     try {
-        const res = await customFetch(`${API_URL}/inventory`, { headers: getAuthHeaders() });
+        const res = await customFetch(`${API_URL}/api/inventory`, { headers: getAuthHeaders() });
         const json = await handleResponse(res);
         if (!res.ok) throw new Error(json.message || json.error || "Inventory fetch failed");
         
@@ -111,7 +110,7 @@ export async function getInventory() {
 
 export async function createInventory(payload: any) {
     try {
-        const res = await customFetch(`${API_URL}/inventory`, {
+        const res = await customFetch(`${API_URL}/api/inventory`, {
             method: "POST",
             headers: getAuthHeaders(),
             body: JSON.stringify(payload)
@@ -129,7 +128,7 @@ export async function createInventory(payload: any) {
 
 export async function getDemand() {
     try {
-        const res = await customFetch(`${API_URL}/demand`, { headers: getAuthHeaders() });
+        const res = await customFetch(`${API_URL}/api/demand`, { headers: getAuthHeaders() });
         const json = await handleResponse(res);
         if (!res.ok) throw new Error(json.message || json.error || "Demand fetch failed");
         return json.data || [];
@@ -141,7 +140,7 @@ export async function getDemand() {
 
 export async function createDemand(payload: any) {
     try {
-        const res = await customFetch(`${API_URL}/demand`, {
+        const res = await customFetch(`${API_URL}/api/demand`, {
             method: "POST",
             headers: getAuthHeaders(),
             body: JSON.stringify(payload)
@@ -159,7 +158,7 @@ export async function createDemand(payload: any) {
 
 export async function getDecisions() {
     try {
-        const res = await customFetch(`${API_URL}/decision/reorder?region=global&category=all`, {
+        const res = await customFetch(`${API_URL}/api/decision/reorder?region=global&category=all`, {
             headers: getAuthHeaders()
         });
         if (!res.ok) {
@@ -178,7 +177,7 @@ export async function getDecisions() {
 
 export async function getRequests() {
     try {
-        const res = await customFetch(`${API_URL}/requests`, { headers: getAuthHeaders() });
+        const res = await customFetch(`${API_URL}/api/requests`, { headers: getAuthHeaders() });
         const json = await handleResponse(res);
         if (!res.ok) throw new Error(json.message || json.error || "Requests fetch failed");
         return json.data || [];
@@ -190,7 +189,7 @@ export async function getRequests() {
 
 export async function createRequest(payload: any) {
     try {
-        const res = await customFetch(`${API_URL}/requests`, {
+        const res = await customFetch(`${API_URL}/api/requests`, {
             method: "POST",
             headers: getAuthHeaders(),
             body: JSON.stringify(payload)
@@ -208,7 +207,7 @@ export async function createRequest(payload: any) {
 
 export async function pingHealth() {
     try {
-        const res = await customFetch(`${API_URL}/health`);
+        const res = await customFetch(`${API_URL}/api/health`);
         if (!res.ok) throw new Error("Health check failed");
         return await handleResponse(res);
     } catch (error) {
@@ -221,7 +220,7 @@ export async function pingHealth() {
 
 export async function parseNLP(message: string) {
     try {
-        const res = await customFetch(`${API_URL}/ai/parse`, {
+        const res = await customFetch(`${API_URL}/api/ai/parse`, {
             method: "POST",
             headers: getAuthHeaders(),
             body: JSON.stringify({ message })
@@ -239,7 +238,7 @@ export async function parseNLP(message: string) {
 
 export async function getAnalyticsDemandTrends(period: string = "30d") {
     try {
-        const res = await customFetch(`${API_URL}/analytics/demand-trends?period=${period}`, {
+        const res = await customFetch(`${API_URL}/api/analytics/demand-trends?period=${period}`, {
             headers: getAuthHeaders()
         });
         const json = await handleResponse(res);
@@ -253,7 +252,7 @@ export async function getAnalyticsDemandTrends(period: string = "30d") {
 
 export async function getAnalyticsSeasonal() {
     try {
-        const res = await customFetch(`${API_URL}/analytics/seasonal`, {
+        const res = await customFetch(`${API_URL}/api/analytics/seasonal`, {
             headers: getAuthHeaders()
         });
         const json = await handleResponse(res);
@@ -267,7 +266,7 @@ export async function getAnalyticsSeasonal() {
 
 export async function getAnalyticsCategoryDemand() {
     try {
-        const res = await customFetch(`${API_URL}/analytics/category-demand`, {
+        const res = await customFetch(`${API_URL}/api/analytics/category-demand`, {
             headers: getAuthHeaders()
         });
         const json = await handleResponse(res);
@@ -281,7 +280,7 @@ export async function getAnalyticsCategoryDemand() {
 
 export async function getAnalyticsZonePerformance() {
     try {
-        const res = await customFetch(`${API_URL}/analytics/zone-performance`, {
+        const res = await customFetch(`${API_URL}/api/analytics/zone-performance`, {
             headers: getAuthHeaders()
         });
         const json = await handleResponse(res);
@@ -295,7 +294,7 @@ export async function getAnalyticsZonePerformance() {
 
 export async function getAnalyticsWarehouseUtilization() {
     try {
-        const res = await customFetch(`${API_URL}/analytics/warehouse-utilization`, {
+        const res = await customFetch(`${API_URL}/api/analytics/warehouse-utilization`, {
             headers: getAuthHeaders()
         });
         const json = await handleResponse(res);
@@ -309,7 +308,7 @@ export async function getAnalyticsWarehouseUtilization() {
 
 export async function getAnalyticsTopProducts(limit: number = 10) {
     try {
-        const res = await customFetch(`${API_URL}/analytics/top-products?limit=${limit}`, {
+        const res = await customFetch(`${API_URL}/api/analytics/top-products?limit=${limit}`, {
             headers: getAuthHeaders()
         });
         const json = await handleResponse(res);
@@ -323,7 +322,7 @@ export async function getAnalyticsTopProducts(limit: number = 10) {
 
 export async function getAnalyticsFestivalImpact() {
     try {
-        const res = await customFetch(`${API_URL}/analytics/festival-impact`, {
+        const res = await customFetch(`${API_URL}/api/analytics/festival-impact`, {
             headers: getAuthHeaders()
         });
         const json = await handleResponse(res);
@@ -337,7 +336,7 @@ export async function getAnalyticsFestivalImpact() {
 
 export async function getAnalyticsForecastHistory() {
     try {
-        const res = await customFetch(`${API_URL}/analytics/forecast-history`, {
+        const res = await customFetch(`${API_URL}/api/analytics/forecast-history`, {
             headers: getAuthHeaders()
         });
         const json = await handleResponse(res);
@@ -351,7 +350,7 @@ export async function getAnalyticsForecastHistory() {
 
 export async function getAnalyticsFeatureImportance() {
     try {
-        const res = await customFetch(`${API_URL}/analytics/feature-importance`, {
+        const res = await customFetch(`${API_URL}/api/analytics/feature-importance`, {
             headers: getAuthHeaders()
         });
         const json = await handleResponse(res);
@@ -365,7 +364,7 @@ export async function getAnalyticsFeatureImportance() {
 
 export async function postMLPreview(payload: any) {
     try {
-        const res = await customFetch(`${API_URL}/analytics/ml-preview`, {
+        const res = await customFetch(`${API_URL}/api/analytics/ml-preview`, {
             method: "POST",
             headers: getAuthHeaders(),
             body: JSON.stringify(payload)
@@ -383,7 +382,7 @@ export async function postMLPreview(payload: any) {
 
 export async function bulkUploadRequests(rows: any[]) {
     try {
-        const res = await customFetch(`${API_URL}/bulk/requests`, {
+        const res = await customFetch(`${API_URL}/api/bulk/requests`, {
             method: "POST",
             headers: getAuthHeaders(),
             body: JSON.stringify({ rows })
