@@ -90,7 +90,7 @@ async function seed() {
   // ──────────────────────────────────────────────
   // STEP 1: Parse CSV
   // ──────────────────────────────────────────────
-  const csvPath = path.resolve(__dirname, "../fluxo-rag/data/synthetic_supplychain_data.csv");
+  const csvPath = path.resolve(__dirname, "data/synthetic_supplychain_data.csv");
   if (!fs.existsSync(csvPath)) {
     console.error("❌ CSV not found at:", csvPath);
     process.exit(1);
