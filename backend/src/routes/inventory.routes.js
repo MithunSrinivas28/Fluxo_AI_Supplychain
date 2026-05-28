@@ -7,14 +7,14 @@ const router = express.Router();
 router.post(
   "/inventory",
   protect,
-  authorize("warehouse"),
+  authorize("warehouse", "admin"),
   setInventory
 );
 
 router.get(
   "/inventory",
   protect,
-  authorize("warehouse", "admin"),
+  authorize("warehouse", "admin", "retailer"),
   fetchInventory
 );
 

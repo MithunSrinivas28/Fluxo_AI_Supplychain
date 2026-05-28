@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { AppLayout } from "@/components/AppLayout";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,6 +58,7 @@ const WAREHOUSES = ["A", "B", "C"];
 /* ──────────── component ──────────── */
 const Inventory = () => {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [selectedZone, setSelectedZone] = useState<string>("all");
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
 
@@ -135,10 +137,23 @@ const Inventory = () => {
       setHighlightedRows(prev => new Set(prev).add(id));
       setTimeout(() => setHighlightedRows(prev => { const n = new Set(prev); n.delete(id); return n; }), 2000);
 
+      toast({
+        title: "✅ Inventory Updated",
+        description: `${adjustModal.item.product} stock ${adjustModal.mode === "add" ? "increased" : adjustModal.mode === "remove" ? "decreased" : "threshold set"} — now ${fmt(newStock)} units`,
+      });
+
       setAdjustModal({ open: false, item: null, mode: "add" });
       setAdjustQty("");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to adjust inventory", err);
+      const errMsg = err?.message || "Unknown error";
+      toast({
+        title: "❌ Inventory Update Failed",
+        description: errMsg.includes("403") || errMsg.includes("Access denied")
+          ? "Your role does not have permission to modify inventory. Contact an admin."
+          : `Error: ${errMsg}`,
+        variant: "destructive",
+      });
     }
   };
 

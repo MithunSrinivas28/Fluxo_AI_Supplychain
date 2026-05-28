@@ -47,7 +47,7 @@ const Insights: React.FC = () => {
 
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`${API_URL}/ai/chat`, {
+      const response = await fetch(`${API_URL}/api/ai/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -60,7 +60,8 @@ const Insights: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Network response was not ok');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.response || errorData.error || 'Network response was not ok');
       }
 
       const data = await response.json();
@@ -68,8 +69,9 @@ const Insights: React.FC = () => {
       const aiContent = data.response || data.answer || data.message || data.reply || (typeof data === 'string' ? data : "Received response successfully.");
 
       setMessages(prev => [...prev, { role: 'assistant', content: aiContent }]);
-    } catch (error) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "Service unavailable. Make sure the AI server is running." }]);
+    } catch (error: any) {
+      const errMsg = error?.message || "Service unavailable. Make sure the AI server is running.";
+      setMessages(prev => [...prev, { role: 'assistant', content: errMsg }]);
     } finally {
       setLoading(false);
     }
