@@ -29,15 +29,7 @@ const ago = (iso: string) => {
   if (h < 24) return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
 };
-const computeStatus = (stock: number, min: number, addedDate?: string): InventoryItem["status"] => {
-  if (addedDate) {
-    const daysSinceAdded = (Date.now() - new Date(addedDate).getTime()) / 86400000;
-    if (daysSinceAdded <= 7) return "new";
-  }
-  if (stock <= min * 0.5) return "critical";
-  if (stock <= min) return "low";
-  return "healthy";
-};
+
 
 const severityColor: Record<string, string> = {
   healthy: "bg-success",

@@ -98,20 +98,29 @@ export async function getInventory() {
         if (!res.ok) throw new Error(json.message || json.error || "Inventory fetch failed");
         
         const items = json.data || [];
-        return Array.isArray(items) ? items.map((item: any) => ({
-            id: item._id || item.id || Math.random().toString(),
-            product: item.product || "Unknown Product",
-            sku: item.sku || "UNKN-001",
-            product_id: item.product_id,
-            category: item.category || "General",
-            stock: item.stockLevel ?? item.stock ?? 0,
-            minStock: item.minStock ?? 50,
-            status: item.status || "healthy",
-            lastUpdated: item.updatedAt || new Date().toISOString(),
-            zone: item.zone || "North",
-            warehouse: item.warehouse || "A",
-            transactions: []
-        })) : [];
+        return Array.isArray(items) ? items.map((item: any) => {
+            const stock = item.stockLevel ?? item.stock ?? 0;
+            const minStock = item.minStock ?? 50;
+            
+            let status = "healthy";
+            if (stock === 0) status = "critical";
+            else if (stock <= minStock) status = "low";
+
+            return {
+                id: item._id || item.id || Math.random().toString(),
+                product: item.product || "Unknown Product",
+                sku: item.sku || "UNKN-001",
+                product_id: item.product_id,
+                category: item.category || "General",
+                stock,
+                minStock,
+                status,
+                lastUpdated: item.updatedAt || new Date().toISOString(),
+                zone: item.zone || "North",
+                warehouse: item.warehouse || "A",
+                transactions: []
+            };
+        }) : [];
     } catch (error) {
         console.error("API error:", error);
         throw error;
